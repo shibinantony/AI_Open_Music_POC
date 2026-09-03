@@ -26,20 +26,25 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -170,39 +175,51 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Floating Action Controls (Equalizer & Sleep Timer)
-                Column(
+                // Floating Action Controls (Equalizer & Sleep Timer) - Top-Right Pill to avoid blocking player bar
+                Surface(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 80.dp),
-                    horizontalAlignment = Alignment.End
+                        .align(Alignment.TopEnd)
+                        .padding(top = 12.dp, end = 12.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = AmoledBlack.copy(alpha = 0.75f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFF262626)),
+                    tonalElevation = 6.dp
                 ) {
-                    // Equalizer FAB
-                    FloatingActionButton(
-                        onClick = { showEqualizer = true },
-                        containerColor = SaavnTeal,
-                        contentColor = AmoledBlack,
-                        shape = CircleShape
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.GraphicEq,
-                            contentDescription = "Studio Equalizer"
-                        )
-                    }
+                        // Equalizer Button
+                        IconButton(
+                            onClick = { showEqualizer = true },
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = SaavnTeal
+                            ),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = "Studio Equalizer",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
 
-                    // Sleep Timer FAB
-                    FloatingActionButton(
-                        onClick = { showSleepTimer = true },
-                        containerColor = if (isTimerRunning) SaavnTeal else AmoledBlack,
-                        contentColor = if (isTimerRunning) AmoledBlack else SaavnTeal,
-                        shape = CircleShape
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bedtime,
-                            contentDescription = "Sleep Timer"
-                        )
+                        // Sleep Timer Button
+                        IconButton(
+                            onClick = { showSleepTimer = true },
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = if (isTimerRunning) SaavnTeal else androidx.compose.ui.graphics.Color(0xFF888888)
+                            ),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bedtime,
+                                contentDescription = "Sleep Timer",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }

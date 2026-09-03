@@ -4,30 +4,27 @@ import android.content.Context
 import android.webkit.WebSettings
 
 /**
- * Manages User-Agent configuration to ensure full mobile browser compatibility
- * and prevent embedded WebView OAuth blockage during social/Google/Phone sign-in.
- *
- * Specific target: Samsung Galaxy S24 FE (SM-S711B, Android 16 / One UI 8.5).
+ * Manages User-Agent configuration to:
+ * 1. Eliminate JioSaavn's artificial mobile web listening limit ("Listen with no limits on the JioSaavn App").
+ * 2. Emulate an unconstrained modern browser environment for unlimited uninterrupted streaming.
+ * 3. Preserve Google/Phone authentication compatibility.
  */
 object UserAgentManager {
 
-    private const val CHROME_VERSION = "134.0.6998.35"
-    private const val DEVICE_MODEL = "SM-S711B"
-    private const val ANDROID_VERSION = "16"
+    private const val DESKTOP_CHROME_UA =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
 
     /**
-     * Builds a clean standard Mobile Chrome user agent string.
+     * Returns a Desktop Chrome user agent string that deactivates JioSaavn's mobile app-wall.
      */
-    fun getCustomMobileUserAgent(context: Context): String {
-        return "Mozilla/5.0 (Linux; Android $ANDROID_VERSION; $DEVICE_MODEL) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "Chrome/$CHROME_VERSION Mobile Safari/537.36"
+    fun getDesktopUserAgent(): String {
+        return DESKTOP_CHROME_UA
     }
 
     /**
      * Applies the sanitized User-Agent to the provided WebSettings.
      */
     fun applyUserAgent(settings: WebSettings, context: Context) {
-        settings.userAgentString = getCustomMobileUserAgent(context)
+        settings.userAgentString = getDesktopUserAgent()
     }
 }

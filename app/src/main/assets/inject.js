@@ -1,14 +1,14 @@
 /**
- * JSABMusic Shielded Core Engine v1.0.0 (JioSaavn Optimization)
- * - Complete Ad & Pro Banner Elimination
+ * JSABMusic Shielded Core Engine v1.0.1 (JioSaavn Optimization)
+ * - Complete Elimination of "Listen with no limits on the JioSaavn App" Wall
+ * - Refined AMOLED Black Palette with Preserved Typography Contrast
  * - True Screen-Off Background Playback (Page Visibility API Hook)
- * - Pure AMOLED Black Theme (#000000)
  * - Studio 5-Band Parametric Equalizer (Lazy-Loaded WebAudio DSP)
  * - Bi-Directional Native Android MediaSession Bridge
  */
 (function () {
-    if (window.__jsabShieldActive) return;
-    window.__jsabShieldActive = true;
+    if (window.__jsabShieldActive_v101) return;
+    window.__jsabShieldActive_v101 = true;
 
     // =========================================================================
     // 1. PAGE VISIBILITY & BACKGROUND AUDIO LOCKDOWN
@@ -41,31 +41,120 @@
     }
 
     // =========================================================================
-    // 2. PURE AMOLED BLACK THEME & PROMO SUPPRESSION STYLES
+    // 2. ELIMINATE "LISTEN WITH NO LIMITS" APP-WALL & STORAGE COUNTERS
+    // =========================================================================
+    function resetPlaybackCounters() {
+        try {
+            const keysToPurge = [
+                'stream_count', 'play_count', 'guest_plays',
+                'anon_stream_count', 'saavn_limit', 'song_count',
+                'anon_listen_limit', 'preview_limit'
+            ];
+            keysToPurge.forEach(k => {
+                localStorage.removeItem(k);
+                sessionStorage.removeItem(k);
+            });
+        } catch (e) {}
+    }
+    resetPlaybackCounters();
+    setInterval(resetPlaybackCounters, 5000);
+
+    function killAppWallsAndPromos() {
+        // Target and annihilate any modal or banner mentioning the JioSaavn App
+        const candidates = document.querySelectorAll(
+            '.o-modal, .c-modal, .c-banner, div[class*="modal"], div[class*="popup"], div[class*="prompt"], div[class*="bottom-sheet"], div[class*="app-banner"]'
+        );
+
+        candidates.forEach(el => {
+            const text = (el.textContent || '').toLowerCase();
+            if (
+                text.includes('listen with no limits') ||
+                text.includes('jiosaavn app') ||
+                text.includes('open in app') ||
+                text.includes('get the app') ||
+                text.includes('download app') ||
+                text.includes('continue on app') ||
+                text.includes('switch to app')
+            ) {
+                el.remove(); // Nuke from DOM
+            }
+        });
+
+        // Auto-close any lingering close buttons
+        const closeBtns = document.querySelectorAll(
+            '.c-modal__close, .o-modal__close, [aria-label="Close"], button.close, .c-btn--dismiss'
+        );
+        closeBtns.forEach(btn => {
+            const modal = btn.closest('.o-modal, .c-modal');
+            if (modal) {
+                const text = (modal.textContent || '').toLowerCase();
+                if (text.includes('app') || text.includes('pro') || text.includes('ad') || text.includes('limit')) {
+                    btn.click();
+                }
+            }
+        });
+
+        // Fast-forward any detected audio ad
+        const media = document.querySelector('audio') || document.querySelector('video');
+        if (media && media.src && (media.src.includes('jioads') || media.src.includes('doubleclick') || media.src.includes('ad_'))) {
+            media.muted = true;
+            if (!isNaN(media.duration) && media.duration > 0) {
+                media.currentTime = media.duration;
+            }
+        }
+    }
+
+    setInterval(killAppWallsAndPromos, 1000);
+
+    // =========================================================================
+    // 3. REFINED HIGH-CONTRAST AMOLED BLACK THEME (ZERO TEXT INVERSION)
     // =========================================================================
     const amoledStyle = document.createElement('style');
-    amoledStyle.id = 'jsab-amoled-theme';
+    amoledStyle.id = 'jsab-refined-theme';
     amoledStyle.textContent = `
-        /* Enforce True AMOLED Black (#000000) across JioSaavn */
-        :root, html, body,
+        /* Backgrounds: Pure AMOLED Black (#000000) for Main Containers */
+        body, html,
         .o-layout, .o-wrapper, .c-page,
         .c-player, #player, .o-player,
-        .c-nav, .c-header, .c-sidebar,
-        .c-main, .c-footer,
-        [class*="theme--dark"], [class*="layout"] {
+        .c-main, .c-footer {
             background-color: #000000 !important;
             background: #000000 !important;
-            color: #FFFFFF !important;
         }
 
-        /* Suppress JioSaavn Ads, Pro Upgrade Modals, Banners, and Interstitials */
+        /* Surfaces: Subtle Dark Slate (#0E0E10) for Navbars & Sidebars */
+        .c-nav, .c-header, .c-sidebar {
+            background-color: #0A0A0C !important;
+            background: #0A0A0C !important;
+            border-bottom: 1px solid #1A1A1E !important;
+        }
+
+        /* Cards & Media Rows */
+        .c-card, .c-list__item, .o-block {
+            background-color: transparent !important;
+        }
+
+        /* Crisp Typography & Contrast Preservation */
+        .c-player__title, .player-song-name, [data-qa="player-song-name"] {
+            color: #FFFFFF !important;
+            font-weight: 600 !important;
+        }
+
+        .c-player__artist, .player-artist-name, [data-qa="player-artist-name"] {
+            color: #9E9E9E !important;
+        }
+
+        /* Hide all App-Wall and Ad elements completely */
         .c-ad, .c-banner-ad, [id*="ad-"], [class*="ad-"],
         .c-ad-slot, .c-leaderboard, .c-banner,
         .o-modal--ad, .o-modal--pro, .o-modal--upgrade,
         [data-ad-unit], .dfp-ad, .c-subscription-prompt,
-        .c-pro-banner, .c-app-download,
+        .c-pro-banner, .c-app-download, .c-app-banner,
+        .c-header__app-badge, .c-btn--app,
+        a[href*="play.google.com"],
+        a[href*="apps.apple.com"],
         .o-modal:has([href*="pro"]),
-        .o-modal:has([class*="pro"]) {
+        .o-modal:has([class*="pro"]),
+        .o-modal:has([href*="play.google"]) {
             display: none !important;
             visibility: hidden !important;
             height: 0 !important;
@@ -80,44 +169,17 @@
         }
     `;
 
-    function applyAmoledTheme() {
-        if (!document.getElementById('jsab-amoled-theme')) {
+    function applyRefinedTheme() {
+        if (!document.getElementById('jsab-refined-theme')) {
             (document.head || document.documentElement).appendChild(amoledStyle);
         }
     }
-    applyAmoledTheme();
-    document.addEventListener('DOMContentLoaded', applyAmoledTheme);
-
-    // =========================================================================
-    // 3. LOW-OVERHEAD AD SKIPPER & MODAL AUTO-DISMISSER
-    // =========================================================================
-    function cleanJioAds() {
-        // Auto dismiss ad dialogs or trial prompts
-        const closeBtns = document.querySelectorAll(
-            '.c-modal__close, .o-modal__close, [aria-label="Close"], button.close, .c-btn--dismiss'
-        );
-        closeBtns.forEach(btn => {
-            const modal = btn.closest('.o-modal, .c-modal');
-            if (modal && (modal.textContent.includes('Pro') || modal.textContent.includes('Ad') || modal.textContent.includes('Upgrade'))) {
-                btn.click();
-            }
-        });
-
-        // Detect if audio element is playing an ad stream
-        const media = document.querySelector('audio') || document.querySelector('video');
-        if (media && media.src && (media.src.includes('jioads') || media.src.includes('doubleclick') || media.src.includes('ad_'))) {
-            media.muted = true;
-            if (!isNaN(media.duration) && media.duration > 0) {
-                media.currentTime = media.duration;
-            }
-        }
-    }
-
-    setInterval(cleanJioAds, 1500);
+    applyRefinedTheme();
+    document.addEventListener('DOMContentLoaded', applyRefinedTheme);
 
     const observer = new MutationObserver(() => {
-        cleanJioAds();
-        applyAmoledTheme();
+        killAppWallsAndPromos();
+        applyRefinedTheme();
     });
 
     observer.observe(document.documentElement, {
@@ -126,7 +188,7 @@
     });
 
     // =========================================================================
-    // 4. METADATA & NATIVE STATE BRIDGE
+    // 4. METADATA & NATIVE STATE BRIDGE WITH ANTI-STALL WATCHDOG
     // =========================================================================
     let lastState = {
         title: '',
@@ -215,13 +277,14 @@
             media.addEventListener(evt, notifyNativeBridge);
         });
 
+        // Anti-Stall Guard: If audio pauses unexpectedly (app wall or focus trigger), auto-resume!
         media.addEventListener('pause', function () {
             if (!intentionalPause && lastState.isPlaying && !media.ended) {
                 setTimeout(() => {
                     if (media.paused && !intentionalPause) {
                         media.play();
                     }
-                }, 100);
+                }, 150);
             }
             notifyNativeBridge();
         });
@@ -288,7 +351,7 @@
     }
 
     // =========================================================================
-    // 6. EXPOSED CONTROL INTERFACE (KOTLIN CALLABLE)
+    // 6. EXPOSED CONTROL INTERFACE
     // =========================================================================
     window.bravePlayer = {
         play: function () {
