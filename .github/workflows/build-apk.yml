@@ -1,0 +1,79 @@
+name: Build Production Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build, Optimize & Publish APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Release & Debug APKs
+        run: gradle assembleRelease assembleDebug --stacktrace
+
+      - name: Rename Output APKs for Direct Download
+        run: |
+          mkdir -p dist
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v1.0.0-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v1.0.0-debug.apk \;
+
+      - name: Upload Release APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JSABMusic-Release-APK
+          path: dist/*.apk
+          retention-days: 30
+
+      - name: Publish Direct Release Download
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: v1.0.0
+          name: "JSABMusic v1.0.0 (Ad-Shielded JioSaavn Player & Persistent Background Engine)"
+          body: |
+            ### 🎵 JSABMusic v1.0.0 — AI-Governed Shielded Audio Player for JioSaavn
+            **Milestone 2 Release — Optimized for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
+
+            #### 🚀 Engineering Highlights & Features:
+            - 🛡️ **Zero-Ad JioSaavn Streaming:** Blocks all JioAds, audio advertisements, sponsored banners, and promotional Pro interstitials at the transport and DOM layer.
+            - 📱 **True Screen-Off Background Play (`BackgroundWebView`):** Decouples Chromium's native visibility signals to guarantee continuous, uninterrupted playback when the device is locked or the screen turns off.
+            - ⌨️ **Flawless Phone OTP & Login Support:** Direct IME window focus preservation so Samsung Keyboard and Gboard summon immediately when tapping input boxes.
+            - 🎚️ **Studio 5-Band Parametric Equalizer:** Hardware WebAudio DSP filter cascade (`60Hz`, `230Hz`, `910Hz`, `3.6kHz`, `14kHz`) + Sub-Bass Booster (+10 dB) + 8 acoustic presets.
+            - ⏱️ **Exponential-Decay Sleep Timer:** 30-second acoustic attenuation fade-out before pausing.
+            - 🔋 **Pure AMOLED Black Theme:** True `#000000` styling for optimal Dynamic AMOLED 2X battery efficiency.
+
+            #### 📥 Download & Install:
+            Download **`JSABMusic-v1.0.0-release.apk`** below, tap to install, and enjoy uninterrupted, ad-free JioSaavn music!
+          files: |
+            dist/JSABMusic-v1.0.0-release.apk
+            dist/JSABMusic-v1.0.0-debug.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

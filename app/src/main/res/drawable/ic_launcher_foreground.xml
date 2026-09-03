@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.6"
+        android:scaleY="0.6"
+        android:translateX="21.6"
+        android:translateY="21.6">
+        <!-- Teal Disc -->
+        <path
+            android:fillColor="#2BC5B4"
+            android:pathData="M54,4C26.4,4 4,26.4 4,54s22.4,50 50,50 50,-22.4 50,-50S81.6,4 54,4z" />
+        <!-- White Music Note / Play Wave -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M42,34v32.5c-1.8,-1 -4,-1.5 -6.5,-1.5 -7.2,0 -13,5.8 -13,13s5.8,13 13,13 13,-5.8 13,-13V48h20v18.5c-1.8,-1 -4,-1.5 -6.5,-1.5 -7.2,0 -13,5.8 -13,13s5.8,13 13,13 13,-5.8 13,-13V34H42z" />
+    </group>
+</vector>

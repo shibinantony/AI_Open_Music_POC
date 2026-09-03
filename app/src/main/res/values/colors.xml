@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="amoled_black">#000000</color>
+    <color name="amoled_surface">#0A0A0A</color>
+    <color name="amoled_card">#121212</color>
+    <color name="saavn_teal">#2BC5B4</color>
+    <color name="saavn_teal_accent">#00E5BC</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#AAAAAA</color>
+    <color name="divider_color">#222222</color>
+</resources>
