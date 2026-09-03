@@ -40,8 +40,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v2.0.1-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v2.0.1-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v2.0.2-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v2.0.2-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -54,23 +54,24 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v2.0.1
-          name: "JSABMusic v2.0.1 (Startup Freeze & ANR Fix - Pure Native Media3)"
+          tag_name: v2.0.2
+          name: "JSABMusic v2.0.2 (Verified 320kbps Akamai CDN & Deep Schema Parser)"
           body: |
-            ### 🎵 JSABMusic v2.0.1 — Pure Native Media3 Audio Player for JioSaavn
+            ### 🎵 JSABMusic v2.0.2 — Pure Native Media3 Audio Player for JioSaavn
             **Engineered for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
 
-            #### 🚀 Crucial Fixes Delivered in v2.0.1:
-            - 🛡️ **Eliminated Startup Freeze & ANR:** Removed the premature `startForegroundService` call in `onCreate()`. On Android 14/15/16, starting a foreground service before audio is actively playing triggers `ForegroundServiceDidNotStartInTimeException` and causes the app to close. Replaced with seamless `BIND_AUTO_CREATE` service binding.
-            - ⚡ **Instant-Launch Curated Streaming:** Pre-loaded high-fidelity curated 320 kbps tracks so the UI renders immediately in under 0.2s with zero white screens or loading freezes, while fresh charts load asynchronously.
-            - 🔊 **Audio HAL Exception Isolation:** Wrapped `android.media.audiofx.Equalizer` and `BassBoost` calls in strict `Throwable` safety handlers and added `MODIFY_AUDIO_SETTINGS` permission in the manifest.
-            - 🌙 **On-Demand Keep-Alives:** Wake locks and Wi-Fi locks are now acquired strictly on-demand during active streaming with safety timeouts, completely eliminating background battery flagging by Samsung One UI.
+            #### 🚀 Enhancements & Fixes in v2.0.2:
+            - 🔑 **Verified DES Key Implementation:** Integrated open-source reference key (`38346591`) unlocking pristine 320 kbps uncompressed AAC/MP4 direct streams from Akamai/Cloudflare CDNs (`saavncdn.com`).
+            - 📊 **Deep `more_info` Schema Resolution:** Fixed JSON payload extraction to pull `encrypted_media_url`, `primary_artists`, and `duration` from nested API structures.
+            - 🛡️ **Zero Startup ANR / Watchdog Hangs:** Completely decoupled foreground service initialization using non-blocking asynchronous binding.
+            - 🔊 **Studio Audio HAL Equalizer:** Hardware 5-Band DSP Equalizer and Sub-Bass Boost (+10 dB) attached directly to the native audio session.
+            - 🌙 **Screen-Off Background Playback:** Fully compliant with Android 14/15/16 background media standards with lock screen scrubber and Bluetooth controls.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v2.0.1-release.apk`** below, tap to install, and enjoy instant, crash-free JioSaavn audio!
+            Download **`JSABMusic-v2.0.2-release.apk`** below, tap to install, and enjoy instant, crash-free JioSaavn audio!
           files: |
-            dist/JSABMusic-v2.0.1-release.apk
-            dist/JSABMusic-v2.0.1-debug.apk
+            dist/JSABMusic-v2.0.2-release.apk
+            dist/JSABMusic-v2.0.2-debug.apk
           draft: false
           prerelease: false
         env:

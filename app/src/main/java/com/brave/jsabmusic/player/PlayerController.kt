@@ -80,31 +80,41 @@ class PlayerController(private val context: Context) {
     }
 
     fun playSong(song: SongItem, playlist: List<SongItem> = listOf(song)) {
-        _queue.value = playlist
-        currentIndex = playlist.indexOf(song).coerceAtLeast(0)
-        _currentSong.value = song
+        try {
+            _queue.value = playlist
+            currentIndex = playlist.indexOf(song).coerceAtLeast(0)
+            _currentSong.value = song
 
-        exoPlayer.clearMediaItems()
+            exoPlayer.clearMediaItems()
 
-        // Enqueue media items for continuous gapless playlist streaming
-        val mediaItems = playlist.map { item ->
-            val metadata = MediaMetadata.Builder()
-                .setTitle(item.title)
-                .setArtist(item.artist)
-                .setAlbumTitle(item.album)
-                .setArtworkUri(Uri.parse(item.highResArtworkUrl))
-                .build()
+            // Enqueue media items for continuous gapless playlist streaming
+            val mediaItems = playlist.mapNotNull { item ->
+                if (item.directStreamUrl.isEmpty()) return@mapNotNull null
+                val metadata = MediaMetadata.Builder()
+                    .setTitle(item.title)
+                    .setArtist(item.artist)
+                    .setAlbumTitle(item.album)
+                    .apply {
+                        if (item.highResArtworkUrl.isNotEmpty()) {
+                            setArtworkUri(Uri.parse(item.highResArtworkUrl))
+                        }
+                    }
+                    .build()
 
-            MediaItem.Builder()
-                .setMediaId(item.id)
-                .setUri(item.directStreamUrl)
-                .setMediaMetadata(metadata)
-                .build()
-        }
+                MediaItem.Builder()
+                    .setMediaId(item.id)
+                    .setUri(item.directStreamUrl)
+                    .setMediaMetadata(metadata)
+                    .build()
+            }
 
-        exoPlayer.setMediaItems(mediaItems, currentIndex, 0L)
-        exoPlayer.prepare()
-        exoPlayer.play()
+            if (mediaItems.isNotEmpty()) {
+                val safeIndex = currentIndex.coerceIn(0, mediaItems.size - 1)
+                exoPlayer.setMediaItems(mediaItems, safeIndex, 0L)
+                exoPlayer.prepare()
+                exoPlayer.play()
+            }
+        } catch (e: Exception) {}
     }
 
     fun togglePlay() {

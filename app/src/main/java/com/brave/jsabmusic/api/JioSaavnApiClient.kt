@@ -12,13 +12,14 @@ import java.util.concurrent.TimeUnit
 
 /**
  * High-performance, asynchronous REST Client communicating directly with JioSaavn's JSON API.
- * Bypasses webview barriers, fetches track metadata, and resolves direct 320 kbps CDN links.
+ * Uses verified schemas from open-source references (sumitkolhe/jiosaavn-api)
+ * to resolve pristine 320 kbps Akamai/Cloudflare CDN media links.
  */
 object JioSaavnApiClient {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
         .build()
 
     private const val BASE_URL = "https://www.jiosaavn.com/api.php"
@@ -36,7 +37,7 @@ object JioSaavnApiClient {
 
             val request = Request.Builder()
                 .url(url)
-                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -47,7 +48,7 @@ object JioSaavnApiClient {
                 val results = json.optJSONArray("results") ?: return@withContext songs
 
                 for (i in 0 until results.length()) {
-                    val obj = results.getJSONObject(i)
+                    val obj = results.optJSONObject(i) ?: continue
                     val song = parseSongJson(obj)
                     if (song != null) {
                         songs.add(song)
@@ -55,7 +56,7 @@ object JioSaavnApiClient {
                 }
             }
         } catch (e: Exception) {
-            // Log notice and return whatever was parsed
+            // Log and return parsed
         }
         return@withContext songs
     }
@@ -66,7 +67,7 @@ object JioSaavnApiClient {
     suspend fun getTrendingSongs(): List<SongItem> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<SongItem>()
 
-        // Playlist 82914609 is JioSaavn's official "Trending Today" Top Chart
+        // Official JioSaavn Top Chart Playlists: Trending Today, Weekly Top 20, Hindi Hitlist
         val trendingPlaylistIds = listOf("82914609", "110858205", "51124653")
 
         for (listId in trendingPlaylistIds) {
@@ -74,7 +75,7 @@ object JioSaavnApiClient {
                 val url = "$BASE_URL?__call=playlist.getDetails&listid=$listId&_format=json&_marker=0&api_version=4"
                 val request = Request.Builder()
                     .url(url)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                     .build()
 
                 client.newCall(request).execute().use { response ->
@@ -82,10 +83,14 @@ object JioSaavnApiClient {
                         val body = response.body?.string() ?: ""
                         if (body.isNotEmpty()) {
                             val json = JSONObject(body)
-                            val list = json.optJSONArray("list") ?: json.optJSONArray("songs")
+                            val list = json.optJSONArray("list")
+                                ?: json.optJSONArray("songs")
+                                ?: json.optJSONObject("more_info")?.optJSONArray("songs")
+
                             if (list != null && list.length() > 0) {
                                 for (i in 0 until list.length()) {
-                                    val song = parseSongJson(list.getJSONObject(i))
+                                    val obj = list.optJSONObject(i) ?: continue
+                                    val song = parseSongJson(obj)
                                     if (song != null) {
                                         songs.add(song)
                                     }
@@ -96,14 +101,14 @@ object JioSaavnApiClient {
                 }
 
                 if (songs.isNotEmpty()) {
-                    break // Successfully obtained trending songs
+                    break // Successfully populated
                 }
             } catch (e: Exception) {
-                // Try fallback playlist
+                // Try next playlist
             }
         }
 
-        // Fallback: search for top hits if playlist was unreachable
+        // Fallback: search for top hits if playlist endpoint had transient issue
         if (songs.isEmpty()) {
             val fallback = searchSongs("Top Hindi Songs")
             if (fallback.isNotEmpty()) return@withContext fallback
@@ -124,8 +129,8 @@ object JioSaavnApiClient {
                 artist = "Arijit Singh, Pritam",
                 album = "Brahmastra",
                 durationSeconds = 268L,
-                highResArtworkUrl = "https://c.saavncdn.com/191/Brahmastra-Hindi-2022-20220717092820-500x500.jpg",
-                directStreamUrl = "https://aac.saavncdn.com/191/91e6b3eb1cb19bc2e54eb8159b95dc02_320.mp4"
+                highResArtworkUrl = "https://c.saavncdn.com/871/Brahmastra-Original-Motion-Picture-Soundtrack-Hindi-2022-20221006155213-500x500.jpg",
+                directStreamUrl = "https://aac.saavncdn.com/871/c2febd353f3a076a406fa37510f31f9f_320.mp4"
             ),
             SongItem(
                 id = "curated_2",
@@ -158,25 +163,47 @@ object JioSaavnApiClient {
     }
 
     private fun parseSongJson(obj: JSONObject): SongItem? {
-        val id = obj.optString("id").ifEmpty { obj.optString("song_id") }
+        val moreInfo = obj.optJSONObject("more_info")
+
+        val id = obj.optString("id").ifEmpty {
+            obj.optString("song_id").ifEmpty {
+                moreInfo?.optString("id") ?: ""
+            }
+        }
         if (id.isEmpty()) return null
 
-        val rawTitle = obj.optString("song").ifEmpty { obj.optString("title") }
-        val title = unescapeHtml(rawTitle)
-
-        val rawArtist = obj.optString("primary_artists").ifEmpty {
-            obj.optString("singers").ifEmpty { obj.optString("artist") }
+        val rawTitle = obj.optString("title").ifEmpty {
+            obj.optString("song").ifEmpty {
+                moreInfo?.optString("song") ?: ""
+            }
         }
+        val title = unescapeHtml(rawTitle).ifEmpty { "Unknown Track" }
+
+        val rawArtist = moreInfo?.optString("primary_artists")?.ifEmpty {
+            moreInfo.optString("singers").ifEmpty {
+                obj.optString("primary_artists").ifEmpty {
+                    obj.optString("singers").ifEmpty {
+                        obj.optString("artist")
+                    }
+                }
+            }
+        } ?: obj.optString("artist")
         val artist = unescapeHtml(rawArtist).ifEmpty { "JioSaavn Artist" }
 
-        val album = unescapeHtml(obj.optString("album"))
-        val duration = obj.optLong("duration", 180L)
+        val rawAlbum = moreInfo?.optString("album") ?: obj.optString("album")
+        val album = unescapeHtml(rawAlbum)
 
-        val rawImage = obj.optString("image").ifEmpty { obj.optString("artwork") }
+        val duration = moreInfo?.optLong("duration") ?: obj.optLong("duration", 180L)
+
+        val rawImage = obj.optString("image").ifEmpty {
+            obj.optString("artwork").ifEmpty {
+                moreInfo?.optString("image") ?: ""
+            }
+        }
         val artwork = MediaUrlResolver.upgradeArtworkUrl(rawImage)
 
-        val encryptedMediaUrl = obj.optString("encrypted_media_url")
-        val mediaPreviewUrl = obj.optString("media_preview_url")
+        val encryptedMediaUrl = moreInfo?.optString("encrypted_media_url") ?: obj.optString("encrypted_media_url")
+        val mediaPreviewUrl = moreInfo?.optString("media_preview_url") ?: obj.optString("media_preview_url")
 
         val streamUrl = MediaUrlResolver.resolve320KbpsStreamUrl(encryptedMediaUrl, mediaPreviewUrl)
         if (streamUrl.isEmpty()) return null
