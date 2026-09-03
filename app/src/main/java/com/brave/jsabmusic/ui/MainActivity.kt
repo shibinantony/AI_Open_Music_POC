@@ -304,7 +304,20 @@ class MainActivity : ComponentActivity() {
                 WebViewCompat.addDocumentStartJavaScript(this, scriptContent, setOf("*"))
             }
 
+            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+
             webViewClient = object : WebViewClient() {
+                override fun onRenderProcessGone(
+                    view: WebView?,
+                    detail: android.webkit.RenderProcessGoneDetail?
+                ): Boolean {
+                    // Prevent app crash; cleanly recreate/reload
+                    view?.post {
+                        view.loadUrl("https://www.jiosaavn.com/")
+                    }
+                    return true
+                }
+
                 override fun shouldInterceptRequest(
                     view: WebView?,
                     request: WebResourceRequest?

@@ -5,26 +5,26 @@ import android.webkit.WebSettings
 
 /**
  * Manages User-Agent configuration to:
- * 1. Eliminate JioSaavn's artificial mobile web listening limit ("Listen with no limits on the JioSaavn App").
- * 2. Emulate an unconstrained modern browser environment for unlimited uninterrupted streaming.
- * 3. Preserve Google/Phone authentication compatibility.
+ * 1. Eliminate mobile app-wall install gates without incurring desktop memory bloat.
+ * 2. Emulate a modern Samsung Galaxy Tablet environment (SM-X910, Android 14, Chrome 134).
+ * 3. Provide smooth, lightweight continuous streaming with full touch navigation.
  */
 object UserAgentManager {
 
-    private const val DESKTOP_CHROME_UA =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+    private const val TABLET_CHROME_UA =
+        "Mozilla/5.0 (Linux; Android 14; SM-X910) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.35 Safari/537.36"
 
     /**
-     * Returns a Desktop Chrome user agent string that deactivates JioSaavn's mobile app-wall.
+     * Returns an optimized tablet Chrome user agent string.
      */
-    fun getDesktopUserAgent(): String {
-        return DESKTOP_CHROME_UA
+    fun getOptimizedUserAgent(): String {
+        return TABLET_CHROME_UA
     }
 
     /**
      * Applies the sanitized User-Agent to the provided WebSettings.
      */
     fun applyUserAgent(settings: WebSettings, context: Context) {
-        settings.userAgentString = getDesktopUserAgent()
+        settings.userAgentString = getOptimizedUserAgent()
     }
 }

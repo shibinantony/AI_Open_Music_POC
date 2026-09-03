@@ -1,14 +1,15 @@
 /**
- * JSABMusic Shielded Core Engine v1.0.1 (JioSaavn Optimization)
- * - Complete Elimination of "Listen with no limits on the JioSaavn App" Wall
- * - Refined AMOLED Black Palette with Preserved Typography Contrast
+ * JSABMusic Shielded Core Engine v1.0.2 (JioSaavn Optimization)
+ * - Zero React DOM Crashes (Pure CSS Non-Destructive Concealment)
+ * - Studio Acoustic Crossfade Engine (Smooth Fade-Out & Fade-In)
+ * - Continuous Queue Auto-Advance Watchdog
  * - True Screen-Off Background Playback (Page Visibility API Hook)
- * - Studio 5-Band Parametric Equalizer (Lazy-Loaded WebAudio DSP)
+ * - Studio 5-Band Parametric Equalizer (Resilient WebAudio DSP)
  * - Bi-Directional Native Android MediaSession Bridge
  */
 (function () {
-    if (window.__jsabShieldActive_v101) return;
-    window.__jsabShieldActive_v101 = true;
+    if (window.__jsabShieldActive_v102) return;
+    window.__jsabShieldActive_v102 = true;
 
     // =========================================================================
     // 1. PAGE VISIBILITY & BACKGROUND AUDIO LOCKDOWN
@@ -41,7 +42,7 @@
     }
 
     // =========================================================================
-    // 2. ELIMINATE "LISTEN WITH NO LIMITS" APP-WALL & STORAGE COUNTERS
+    // 2. STORAGE QUOTA RESET (PREVENTS ARTIFICIAL STREAMING LIMITS)
     // =========================================================================
     function resetPlaybackCounters() {
         try {
@@ -54,63 +55,19 @@
                 localStorage.removeItem(k);
                 sessionStorage.removeItem(k);
             });
+            // Mark app install prompt as permanently dismissed in cookies
+            document.cookie = "app_install_prompt_dismissed=true; path=/; max-age=31536000";
+            document.cookie = "stream_limit_acknowledged=true; path=/; max-age=31536000";
         } catch (e) {}
     }
     resetPlaybackCounters();
     setInterval(resetPlaybackCounters, 5000);
 
-    function killAppWallsAndPromos() {
-        // Target and annihilate any modal or banner mentioning the JioSaavn App
-        const candidates = document.querySelectorAll(
-            '.o-modal, .c-modal, .c-banner, div[class*="modal"], div[class*="popup"], div[class*="prompt"], div[class*="bottom-sheet"], div[class*="app-banner"]'
-        );
-
-        candidates.forEach(el => {
-            const text = (el.textContent || '').toLowerCase();
-            if (
-                text.includes('listen with no limits') ||
-                text.includes('jiosaavn app') ||
-                text.includes('open in app') ||
-                text.includes('get the app') ||
-                text.includes('download app') ||
-                text.includes('continue on app') ||
-                text.includes('switch to app')
-            ) {
-                el.remove(); // Nuke from DOM
-            }
-        });
-
-        // Auto-close any lingering close buttons
-        const closeBtns = document.querySelectorAll(
-            '.c-modal__close, .o-modal__close, [aria-label="Close"], button.close, .c-btn--dismiss'
-        );
-        closeBtns.forEach(btn => {
-            const modal = btn.closest('.o-modal, .c-modal');
-            if (modal) {
-                const text = (modal.textContent || '').toLowerCase();
-                if (text.includes('app') || text.includes('pro') || text.includes('ad') || text.includes('limit')) {
-                    btn.click();
-                }
-            }
-        });
-
-        // Fast-forward any detected audio ad
-        const media = document.querySelector('audio') || document.querySelector('video');
-        if (media && media.src && (media.src.includes('jioads') || media.src.includes('doubleclick') || media.src.includes('ad_'))) {
-            media.muted = true;
-            if (!isNaN(media.duration) && media.duration > 0) {
-                media.currentTime = media.duration;
-            }
-        }
-    }
-
-    setInterval(killAppWallsAndPromos, 1000);
-
     // =========================================================================
-    // 3. REFINED HIGH-CONTRAST AMOLED BLACK THEME (ZERO TEXT INVERSION)
+    // 3. NON-DESTRUCTIVE CSS SHIELDING (PRESERVES REACT VIRTUAL DOM)
     // =========================================================================
     const amoledStyle = document.createElement('style');
-    amoledStyle.id = 'jsab-refined-theme';
+    amoledStyle.id = 'jsab-v102-theme';
     amoledStyle.textContent = `
         /* Backgrounds: Pure AMOLED Black (#000000) for Main Containers */
         body, html,
@@ -121,7 +78,7 @@
             background: #000000 !important;
         }
 
-        /* Surfaces: Subtle Dark Slate (#0E0E10) for Navbars & Sidebars */
+        /* Surfaces: Subtle Dark Slate (#0A0A0C) for Navbars & Headers */
         .c-nav, .c-header, .c-sidebar {
             background-color: #0A0A0C !important;
             background: #0A0A0C !important;
@@ -143,7 +100,7 @@
             color: #9E9E9E !important;
         }
 
-        /* Hide all App-Wall and Ad elements completely */
+        /* Non-Destructive Ad & App-Wall Concealment (DO NOT USE .remove()!) */
         .c-ad, .c-banner-ad, [id*="ad-"], [class*="ad-"],
         .c-ad-slot, .c-leaderboard, .c-banner,
         .o-modal--ad, .o-modal--pro, .o-modal--upgrade,
@@ -154,13 +111,16 @@
         a[href*="apps.apple.com"],
         .o-modal:has([href*="pro"]),
         .o-modal:has([class*="pro"]),
-        .o-modal:has([href*="play.google"]) {
+        .o-modal:has([href*="play.google"]),
+        .o-modal:has([href*="apps.apple"]),
+        .c-app-wall, .o-modal--app {
             display: none !important;
             visibility: hidden !important;
             height: 0 !important;
             width: 0 !important;
             opacity: 0 !important;
             pointer-events: none !important;
+            z-index: -9999 !important;
         }
 
         /* Player bar styling */
@@ -169,17 +129,44 @@
         }
     `;
 
-    function applyRefinedTheme() {
-        if (!document.getElementById('jsab-refined-theme')) {
+    function applyShieldStyles() {
+        if (!document.getElementById('jsab-v102-theme')) {
             (document.head || document.documentElement).appendChild(amoledStyle);
         }
     }
-    applyRefinedTheme();
-    document.addEventListener('DOMContentLoaded', applyRefinedTheme);
+    applyShieldStyles();
+    document.addEventListener('DOMContentLoaded', applyShieldStyles);
+
+    // Click dismiss button safely without modifying React DOM
+    function autoDismissPromos() {
+        const closeBtns = document.querySelectorAll(
+            '.c-modal__close, .o-modal__close, [aria-label="Close"], button.close, .c-btn--dismiss'
+        );
+        closeBtns.forEach(btn => {
+            const modal = btn.closest('.o-modal, .c-modal');
+            if (modal) {
+                const text = (modal.textContent || '').toLowerCase();
+                if (text.includes('app') || text.includes('pro') || text.includes('ad') || text.includes('limit')) {
+                    btn.click();
+                }
+            }
+        });
+
+        // Mute and fast-forward audio ad streams
+        const media = document.querySelector('audio') || document.querySelector('video');
+        if (media && media.src && (media.src.includes('jioads') || media.src.includes('doubleclick') || media.src.includes('ad_'))) {
+            media.muted = true;
+            if (!isNaN(media.duration) && media.duration > 0) {
+                media.currentTime = media.duration;
+            }
+        }
+    }
+
+    setInterval(autoDismissPromos, 1500);
 
     const observer = new MutationObserver(() => {
-        killAppWallsAndPromos();
-        applyRefinedTheme();
+        autoDismissPromos();
+        applyShieldStyles();
     });
 
     observer.observe(document.documentElement, {
@@ -188,7 +175,69 @@
     });
 
     // =========================================================================
-    // 4. METADATA & NATIVE STATE BRIDGE WITH ANTI-STALL WATCHDOG
+    // 4. STUDIO ACOUSTIC CROSSFADE & CONTINUOUS PLAY WATCHDOG
+    // =========================================================================
+    let masterVolume = 1.0;
+    let isFadingOut = false;
+    let transitionWatchdogTimer = null;
+
+    function handleCrossfadeProgress() {
+        const media = document.querySelector('audio') || document.querySelector('video');
+        if (!media || isNaN(media.duration) || media.duration <= 6) return;
+
+        const timeLeft = media.duration - media.currentTime;
+
+        // Smooth Acoustic Fade-Out over final 2.5 seconds
+        if (timeLeft <= 2.5 && timeLeft > 0.1 && !isFadingOut) {
+            isFadingOut = true;
+            let step = 0;
+            const fadeInterval = setInterval(() => {
+                step += 1;
+                const factor = Math.max(0.15, 1.0 - (step / 10.0));
+                if (media && !media.paused) {
+                    media.volume = factor * masterVolume;
+                }
+                if (step >= 10 || media.ended) {
+                    clearInterval(fadeInterval);
+                }
+            }, 200);
+        }
+    }
+
+    function handleTrackStartFadeIn() {
+        const media = document.querySelector('audio') || document.querySelector('video');
+        if (!media) return;
+
+        isFadingOut = false;
+        let step = 0;
+        media.volume = 0.25 * masterVolume;
+
+        const inInterval = setInterval(() => {
+            step += 1;
+            const factor = Math.min(1.0, 0.25 + (step * 0.15));
+            if (media) {
+                media.volume = factor * masterVolume;
+            }
+            if (step >= 5) {
+                if (media) media.volume = masterVolume;
+                clearInterval(inInterval);
+            }
+        }, 180);
+    }
+
+    function onTrackEnded() {
+        clearTimeout(transitionWatchdogTimer);
+        // If JioSaavn does not advance within 900ms, force next track
+        transitionWatchdogTimer = setTimeout(() => {
+            const media = document.querySelector('audio') || document.querySelector('video');
+            if (media && (media.paused || media.ended)) {
+                window.bravePlayer && window.bravePlayer.next();
+            }
+        }, 900);
+    }
+
+    // =========================================================================
+    // 5. METADATA & NATIVE STATE BRIDGE
     // =========================================================================
     let lastState = {
         title: '',
@@ -268,53 +317,79 @@
         }
     }
 
+    let boundMediaElement = null;
+
     function setupMediaListeners() {
         const media = document.querySelector('audio') || document.querySelector('video');
-        if (!media) return;
+        if (!media || media === boundMediaElement) return;
 
-        ['play', 'playing', 'timeupdate', 'ended', 'loadedmetadata', 'seeking', 'seeked'].forEach(evt => {
-            media.removeEventListener(evt, notifyNativeBridge);
-            media.addEventListener(evt, notifyNativeBridge);
-        });
+        boundMediaElement = media;
 
-        // Anti-Stall Guard: If audio pauses unexpectedly (app wall or focus trigger), auto-resume!
-        media.addEventListener('pause', function () {
-            if (!intentionalPause && lastState.isPlaying && !media.ended) {
-                setTimeout(() => {
-                    if (media.paused && !intentionalPause) {
-                        media.play();
-                    }
-                }, 150);
-            }
+        media.addEventListener('play', () => {
+            intentionalPause = false;
+            handleTrackStartFadeIn();
             notifyNativeBridge();
         });
+
+        media.addEventListener('playing', () => {
+            intentionalPause = false;
+            notifyNativeBridge();
+        });
+
+        media.addEventListener('timeupdate', () => {
+            handleCrossfadeProgress();
+            notifyNativeBridge();
+        });
+
+        media.addEventListener('ended', () => {
+            onTrackEnded();
+            notifyNativeBridge();
+        });
+
+        media.addEventListener('pause', () => {
+            notifyNativeBridge();
+        });
+
+        media.addEventListener('loadedmetadata', notifyNativeBridge);
     }
 
-    setInterval(setupMediaListeners, 2000);
+    setInterval(setupMediaListeners, 1500);
 
     // =========================================================================
-    // 5. LAZY-LOADED STUDIO EQUALIZER DSP
+    // 6. RESILIENT STUDIO EQUALIZER DSP (RE-ATTACHABLE ACROSS TRACKS)
     // =========================================================================
     let audioCtx = null;
     let sourceNode = null;
+    let connectedMedia = null;
     let eqFilters = [];
     let bassBoostFilter = null;
     let preampGainNode = null;
-    let isEqReady = false;
+    let isEqConfigured = false;
 
     const bandFrequencies = [60, 230, 910, 3600, 14000];
 
     function setupEqualizerDSP() {
-        if (isEqReady) return;
         const media = document.querySelector('audio') || document.querySelector('video');
         if (!media) return;
+
+        // If media element already connected, do not re-create source node
+        if (isEqConfigured && connectedMedia === media) return;
 
         try {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
             if (!AudioContextClass) return;
 
-            audioCtx = new AudioContextClass();
+            if (!audioCtx) {
+                audioCtx = new AudioContextClass();
+            }
+
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            // Create media source node safely
             sourceNode = audioCtx.createMediaElementSource(media);
+            connectedMedia = media;
 
             bassBoostFilter = audioCtx.createBiquadFilter();
             bassBoostFilter.type = 'lowshelf';
@@ -346,12 +421,14 @@
             currentNode.connect(preampGainNode);
             preampGainNode.connect(audioCtx.destination);
 
-            isEqReady = true;
-        } catch (e) {}
+            isEqConfigured = true;
+        } catch (e) {
+            console.warn('[JSABMusic] WebAudio DSP attachment notice:', e.message);
+        }
     }
 
     // =========================================================================
-    // 6. EXPOSED CONTROL INTERFACE
+    // 7. EXPOSED CONTROL INTERFACE
     // =========================================================================
     window.bravePlayer = {
         play: function () {
@@ -359,7 +436,7 @@
             const media = document.querySelector('audio') || document.querySelector('video');
             if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             if (media && media.paused) {
-                media.play();
+                media.play().catch(() => {});
             } else {
                 const btn = document.querySelector('.c-player__btn--play') ||
                             document.querySelector('#play') ||
@@ -405,8 +482,9 @@
             if (media && !isNaN(seconds)) media.currentTime = seconds;
         },
         setVolume: function (volumePercent) {
+            masterVolume = Math.max(0, Math.min(1, volumePercent));
             const media = document.querySelector('audio') || document.querySelector('video');
-            if (media) media.volume = Math.max(0, Math.min(1, volumePercent));
+            if (media) media.volume = masterVolume;
         },
         setEqualizer: function (bandGainsArray, bassBoostGain, preampGain) {
             setupEqualizerDSP();

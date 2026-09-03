@@ -40,8 +40,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v1.0.1-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v1.0.1-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v1.0.2-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v1.0.2-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -54,24 +54,24 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v1.0.1
-          name: "JSABMusic v1.0.1 (Unlimited Playback & Refined Dark UI)"
+          tag_name: v1.0.2
+          name: "JSABMusic v1.0.2 (Black Screen Crash Fix & Acoustic Crossfade)"
           body: |
-            ### 🎵 JSABMusic v1.0.1 — AI-Governed Shielded Audio Player for JioSaavn
+            ### 🎵 JSABMusic v1.0.2 — AI-Governed Shielded Audio Player for JioSaavn
             **Optimized for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
 
-            #### 🚀 Crucial Fixes & Upgrades in v1.0.1:
-            - ♾️ **Eliminated "Listen with no limits on the JioSaavn App" Wall:** Spoofs modern desktop browser capabilities and runs a pre-DOM App-Wall annihilator, preventing JioSaavn from ever locking playback or halting music.
-            - 🎨 **Refined High-Contrast AMOLED Dark UI:** Fixed confusing clashing colors and inverted text. Song titles are now crisp `#FFFFFF`, artist bylines are muted `#9E9E9E`, and buttons have high, pleasant contrast.
-            - 🎛️ **Non-Intrusive Top-Right Action Pill:** Moved Equalizer and Sleep Timer buttons to an elegant, translucent top-right pill, completely clearing the bottom player bar and navigation controls.
-            - 🛡️ **Zero Ads & Audio-Ad Fast-Forward:** Complete background shielding against JioAds, audio ads, and subscription popups.
-            - 📱 **True Screen-Off Background Play:** Persistent background audio via `BackgroundWebView` visibility decoupling.
+            #### 🚀 Crucial Fixes & Architectural Upgrades in v1.0.2:
+            - 🛡️ **Permanent Black Screen Crash Fix:** Completely eliminated `.remove()` DOM mutations that broke React's Virtual DOM reconciliation during song transitions. The UI now remains 100% stable across unlimited track changes without ever crashing into a blank screen.
+            - 🎚️ **Studio Acoustic Crossfade Engine:** Implemented smooth continuous crossfading between songs (2.5s fade-out + 1.5s fade-in), preventing clicks, pops, or audio drops between consecutive tracks.
+            - ⏱️ **Queue Auto-Advance Guard:** Added an intelligent track-transition watchdog that automatically advances to the next track if JioSaavn's player ever stalls on track completion.
+            - 🔊 **Resilient 5-Band Equalizer DSP:** Wrapped WebAudio filter nodes in a re-attachable pipeline that stays active and persistent across dynamic track source changes.
+            - 📱 **Chromium Renderer Protection:** Added native `onRenderProcessGone` recovery and hardware layer composition to eliminate GPU memory exhaustion.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v1.0.1-release.apk`** below, tap to install, and enjoy continuous unlimited JioSaavn music!
+            Download **`JSABMusic-v1.0.2-release.apk`** below, tap to install, and enjoy uninterrupted, crash-free JioSaavn music!
           files: |
-            dist/JSABMusic-v1.0.1-release.apk
-            dist/JSABMusic-v1.0.1-debug.apk
+            dist/JSABMusic-v1.0.2-release.apk
+            dist/JSABMusic-v1.0.2-debug.apk
           draft: false
           prerelease: false
         env:
