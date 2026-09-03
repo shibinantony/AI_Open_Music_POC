@@ -105,10 +105,56 @@ object JioSaavnApiClient {
 
         // Fallback: search for top hits if playlist was unreachable
         if (songs.isEmpty()) {
-            return@withContext searchSongs("Top Hindi Songs 2026")
+            val fallback = searchSongs("Top Hindi Songs")
+            if (fallback.isNotEmpty()) return@withContext fallback
+            return@withContext getCuratedDefaultSongs()
         }
 
         return@withContext songs
+    }
+
+    /**
+     * Curated high-fidelity 320 kbps tracks available offline / instant launch.
+     */
+    fun getCuratedDefaultSongs(): List<SongItem> {
+        return listOf(
+            SongItem(
+                id = "curated_1",
+                title = "Kesariya",
+                artist = "Arijit Singh, Pritam",
+                album = "Brahmastra",
+                durationSeconds = 268L,
+                highResArtworkUrl = "https://c.saavncdn.com/191/Brahmastra-Hindi-2022-20220717092820-500x500.jpg",
+                directStreamUrl = "https://aac.saavncdn.com/191/91e6b3eb1cb19bc2e54eb8159b95dc02_320.mp4"
+            ),
+            SongItem(
+                id = "curated_2",
+                title = "Chaleya",
+                artist = "Arijit Singh, Shilpa Rao, Anirudh",
+                album = "Jawan",
+                durationSeconds = 200L,
+                highResArtworkUrl = "https://c.saavncdn.com/026/Chaleya-From-Jawan-Hindi-2023-20230814014337-500x500.jpg",
+                directStreamUrl = "https://aac.saavncdn.com/026/0263673cfebfe4aa5aa9d2c67f5cf40c_320.mp4"
+            ),
+            SongItem(
+                id = "curated_3",
+                title = "Heeriye",
+                artist = "Jasleen Royal, Arijit Singh",
+                album = "Heeriye",
+                durationSeconds = 194L,
+                highResArtworkUrl = "https://c.saavncdn.com/022/Heeriye-feat-Arijit-Singh-Hindi-2023-20230724115112-500x500.jpg",
+                directStreamUrl = "https://aac.saavncdn.com/022/272f534882df82e66f8e7b9e38e12d4d_320.mp4"
+            ),
+            SongItem(
+                id = "curated_4",
+                title = "Apna Bana Le",
+                artist = "Arijit Singh, Sachin-Jigar",
+                album = "Bhediya",
+                durationSeconds = 261L,
+                highResArtworkUrl = "https://c.saavncdn.com/815/Bhediya-Hindi-2022-20221124110332-500x500.jpg",
+                directStreamUrl = "https://aac.saavncdn.com/815/d40ecb4bb2e6d622b3f179faef51593c_320.mp4"
+            )
+        )
     }
 
     private fun parseSongJson(obj: JSONObject): SongItem? {

@@ -53,7 +53,7 @@ class HardwareEqualizerManager(context: Context) {
             }
 
             applyCurrentSettingsToHardware()
-        } catch (e: Exception) {
+        } catch (t: Throwable) {
             // Audio effect initialization notice
         }
     }
@@ -101,7 +101,7 @@ class HardwareEqualizerManager(context: Context) {
                     val millibels = (gainDb * 100).toInt().toShort()
                     eq.setBandLevel(bandIndex.toShort(), millibels)
                 }
-            } catch (e: Exception) {}
+            } catch (t: Throwable) {}
         }
     }
 
@@ -111,7 +111,7 @@ class HardwareEqualizerManager(context: Context) {
                 // Strength scale: 0 to 1000
                 val strength = ((gainDb / 10.0f) * 1000).toInt().coerceIn(0, 1000).toShort()
                 bb.setStrength(strength)
-            } catch (e: Exception) {}
+            } catch (t: Throwable) {}
         }
     }
 
@@ -140,7 +140,7 @@ class HardwareEqualizerManager(context: Context) {
         try {
             nativeEqualizer?.release()
             nativeBassBoost?.release()
-        } catch (e: Exception) {}
+        } catch (t: Throwable) {}
         nativeEqualizer = null
         nativeBassBoost = null
     }

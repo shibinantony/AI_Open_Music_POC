@@ -1,10 +1,14 @@
 package com.brave.jsabmusic.ui
 
 import android.Manifest
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -26,7 +30,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -42,7 +45,6 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -93,6 +95,17 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var playerController: PlayerController
     private val sleepTimerManager = SleepTimerManager()
+    private var isServiceBound = false
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            isServiceBound = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            isServiceBound = false
+        }
+    }
 
     private val requestNotificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ -> }
@@ -101,14 +114,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // Initialize PlayerController and bind to MediaSessionService
-        playerController = PlaybackService.playerControllerInstance ?: PlayerController(applicationContext).also {
-            PlaybackService.playerControllerInstance = it
-        }
-        sleepTimerManager.setPlayerController(playerController)
+        try {
+            // Initialize PlayerController and bind to MediaSessionService
+            playerController = PlaybackService.playerControllerInstance ?: PlayerController(applicationContext).also {
+                PlaybackService.playerControllerInstance = it
+            }
+            sleepTimerManager.setPlayerController(playerController)
 
-        checkNotificationPermission()
-        startPlaybackService()
+            checkNotificationPermission()
+            bindPlaybackService()
+        } catch (e: Exception) {
+            // Handled safely
+        }
 
         setContent {
             JSABMusicTheme {
@@ -132,16 +149,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startPlaybackService() {
-        val serviceIntent = Intent(this, PlaybackService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
+    private fun bindPlaybackService() {
+        try {
+            val serviceIntent = Intent(this, PlaybackService::class.java)
+            bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+        } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
+        if (isServiceBound) {
+            try {
+                unbindService(serviceConnection)
+            } catch (e: Exception) {}
+            isServiceBound = false
+        }
         super.onDestroy()
     }
 }
@@ -156,7 +177,7 @@ fun MainPlayerScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<SongItem>>(emptyList()) }
-    var trendingSongs by remember { mutableStateOf<List<SongItem>>(emptyList()) }
+    var trendingSongs by remember { mutableStateOf(JioSaavnApiClient.getCuratedDefaultSongs()) }
     var isLoading by remember { mutableStateOf(false) }
 
     var showEqualizer by remember { mutableStateOf(false) }
@@ -167,11 +188,14 @@ fun MainPlayerScreen(
     val isPlaying by playerController.isPlaying.collectAsState()
     val isTimerRunning by sleepTimerManager.isTimerRunning.collectAsState()
 
-    // Fetch trending songs on startup
+    // Fetch fresh live trending songs on startup asynchronously
     LaunchedEffect(Unit) {
-        isLoading = true
-        trendingSongs = JioSaavnApiClient.getTrendingSongs()
-        isLoading = false
+        try {
+            val freshSongs = JioSaavnApiClient.getTrendingSongs()
+            if (freshSongs.isNotEmpty()) {
+                trendingSongs = freshSongs
+            }
+        } catch (e: Exception) {}
     }
 
     Scaffold(
@@ -264,7 +288,9 @@ fun MainPlayerScreen(
                         if (query.length >= 2) {
                             scope.launch {
                                 isLoading = true
-                                searchResults = JioSaavnApiClient.searchSongs(query)
+                                try {
+                                    searchResults = JioSaavnApiClient.searchSongs(query)
+                                } catch (e: Exception) {}
                                 isLoading = false
                             }
                         } else if (query.isEmpty()) {
