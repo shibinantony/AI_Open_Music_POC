@@ -1,20 +1,19 @@
 package com.brave.jsabmusic.timer
 
-import android.content.Context
 import android.os.CountDownTimer
-import com.brave.jsabmusic.bridge.WebInterfaceBridge
+import com.brave.jsabmusic.player.PlayerController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.exp
 
 /**
- * Intelligent Sleep Timer featuring a 30-second exponential audio fade-out
- * before issuing a hard pause and releasing system wake locks.
+ * Intelligent Sleep Timer with a smooth 30-second exponential acoustic fade-out
+ * directly interacting with the native ExoPlayer audio pipeline.
  */
-class SleepTimerManager(private val context: Context) {
+class SleepTimerManager {
 
-    private var bridge: WebInterfaceBridge? = null
+    private var playerController: PlayerController? = null
     private var countDownTimer: CountDownTimer? = null
 
     private val _remainingSeconds = MutableStateFlow(0L)
@@ -23,8 +22,8 @@ class SleepTimerManager(private val context: Context) {
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning.asStateFlow()
 
-    fun setBridge(bridge: WebInterfaceBridge) {
-        this.bridge = bridge
+    fun setPlayerController(controller: PlayerController) {
+        this.playerController = controller
     }
 
     fun startTimer(minutes: Int) {
@@ -41,15 +40,15 @@ class SleepTimerManager(private val context: Context) {
                 if (secondsLeft in 1..30) {
                     val fadeFactor = (secondsLeft / 30.0f)
                     val curveVolume = exp(3.0 * (fadeFactor - 1.0)).toFloat().coerceIn(0.01f, 1.0f)
-                    bridge?.setVolume(curveVolume)
+                    playerController?.setVolume(curveVolume)
                 }
             }
 
             override fun onFinish() {
                 _remainingSeconds.value = 0L
                 _isTimerRunning.value = false
-                bridge?.pause()
-                bridge?.setVolume(1.0f) // Restore volume level for future playback
+                playerController?.exoPlayer?.pause()
+                playerController?.setVolume(1.0f)
             }
         }.start()
     }
@@ -59,6 +58,6 @@ class SleepTimerManager(private val context: Context) {
         countDownTimer = null
         _remainingSeconds.value = 0L
         _isTimerRunning.value = false
-        bridge?.setVolume(1.0f)
+        playerController?.setVolume(1.0f)
     }
 }

@@ -89,6 +89,18 @@ dependencies {
     // Media & Background Service (Android 14+ Compliant)
     implementation("androidx.media:media:1.7.0")
 
+    // AndroidX Media3 (ExoPlayer + MediaSession)
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
+    implementation("androidx.media3:media3-session:1.3.1")
+    implementation("androidx.media3:media3-common:1.3.1")
+    implementation("androidx.media3:media3-ui:1.3.1")
+
+    // Coil Image Loading for Album Artwork
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // OkHttp REST Client
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // WebView & AndroidX Webkit
     implementation("androidx.webkit:webkit:1.10.0")
 

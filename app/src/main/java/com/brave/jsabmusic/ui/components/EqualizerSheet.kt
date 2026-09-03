@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,7 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.brave.jsabmusic.equalizer.EqualizerDefaults
-import com.brave.jsabmusic.equalizer.EqualizerManager
+import com.brave.jsabmusic.equalizer.HardwareEqualizerManager
 import com.brave.jsabmusic.ui.theme.AmoledBlack
 import com.brave.jsabmusic.ui.theme.AmoledCard
 import com.brave.jsabmusic.ui.theme.SaavnTeal
@@ -45,13 +44,12 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EqualizerSheet(
-    equalizerManager: EqualizerManager,
+    equalizerManager: HardwareEqualizerManager,
     onDismissRequest: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val bandGains by equalizerManager.bandGains.collectAsState()
     val bassBoost by equalizerManager.bassBoost.collectAsState()
-    val preampGain by equalizerManager.preampGain.collectAsState()
     val currentPreset by equalizerManager.currentPreset.collectAsState()
 
     ModalBottomSheet(
@@ -72,21 +70,28 @@ fun EqualizerSheet(
             ) {
                 Icon(
                     imageVector = Icons.Default.GraphicEq,
-                    contentDescription = "Studio Equalizer",
+                    contentDescription = "Hardware Studio Equalizer",
                     tint = SaavnTeal,
                     modifier = Modifier.padding(end = 12.dp)
                 )
-                Text(
-                    text = "Studio Equalizer",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
+                Column {
+                    Text(
+                        text = "Hardware Studio Equalizer",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Samsung Audio HAL DSP Accelerated",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = currentPreset,
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     color = SaavnTealAccent
                 )
             }
@@ -120,7 +125,7 @@ fun EqualizerSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 5-Band Vertical-style sliders rendered in clean rows
+            // 5-Band Hardware Sliders
             EqualizerDefaults.BANDS.forEach { band ->
                 val gain = bandGains.getOrElse(band.index) { 0f }
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
@@ -157,7 +162,7 @@ fun EqualizerSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Bass Booster Slider
+            // Hardware Bass Booster Slider
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
