@@ -102,6 +102,9 @@ import kotlinx.coroutines.launch
 /**
  * Pure Native AndroidX Media3 Audio Player for JioSaavn.
  * 100% Ad-Free, 320 kbps Uncompressed CDN Audio, Hardware Audio DSP, Zero WebViews.
+ *
+ * v2.1.0: Bifurcated search — Songs / Albums / Artists / Playlists tabs with
+ *         parallel JioSaavn API queries and one-tap drill-down playback.
  */
 class MainActivity : ComponentActivity() {
 
@@ -113,7 +116,6 @@ class MainActivity : ComponentActivity() {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             isServiceBound = true
         }
-
         override fun onServiceDisconnected(name: ComponentName?) {
             isServiceBound = false
         }
@@ -127,9 +129,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         try {
-            playerController = PlaybackService.playerControllerInstance ?: PlayerController(applicationContext).also {
-                PlaybackService.playerControllerInstance = it
-            }
+            playerController = PlaybackService.playerControllerInstance
+                ?: PlayerController(applicationContext).also {
+                    PlaybackService.playerControllerInstance = it
+                }
             sleepTimerManager.setPlayerController(playerController)
             checkNotificationPermission()
             bindPlaybackService()
@@ -148,8 +151,7 @@ class MainActivity : ComponentActivity() {
     private fun checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
+                    this, Manifest.permission.POST_NOTIFICATIONS
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
                 requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -174,10 +176,14 @@ class MainActivity : ComponentActivity() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Search tab definitions
+// Search tab labels
 // ─────────────────────────────────────────────────────────────────────────────
 
 private val SEARCH_TABS = listOf("Songs", "Albums", "Artists", "Playlists")
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Screen
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun MainPlayerScreen(
@@ -188,26 +194,25 @@ fun MainPlayerScreen(
     val focusManager = LocalFocusManager.current
 
     // ── State ────────────────────────────────────────────────────────────────
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableIntStateOf(0) }          // 0 Songs | 1 Albums | 2 Artists | 3 Playlists
+    var searchQuery     by remember { mutableStateOf("") }
+    var selectedTab     by remember { mutableIntStateOf(0) }
 
     var songResults     by remember { mutableStateOf<List<SongItem>>(emptyList()) }
     var albumResults    by remember { mutableStateOf<List<AlbumItem>>(emptyList()) }
     var artistResults   by remember { mutableStateOf<List<ArtistItem>>(emptyList()) }
     var playlistResults by remember { mutableStateOf<List<PlaylistItem>>(emptyList()) }
+    var trendingSongs   by remember { mutableStateOf(JioSaavnApiClient.getCuratedDefaultSongs()) }
+    var isLoading       by remember { mutableStateOf(false) }
 
-    var trendingSongs by remember { mutableStateOf(JioSaavnApiClient.getCuratedDefaultSongs()) }
-    var isLoading     by remember { mutableStateOf(false) }
+    var showEqualizer   by remember { mutableStateOf(false) }
+    var showSleepTimer  by remember { mutableStateOf(false) }
+    var showNowPlaying  by remember { mutableStateOf(false) }
 
-    var showEqualizer  by remember { mutableStateOf(false) }
-    var showSleepTimer by remember { mutableStateOf(false) }
-    var showNowPlaying by remember { mutableStateOf(false) }
+    val currentSong     by playerController.currentSong.collectAsState()
+    val isPlaying       by playerController.isPlaying.collectAsState()
+    val isTimerRunning  by sleepTimerManager.isTimerRunning.collectAsState()
 
-    val currentSong    by playerController.currentSong.collectAsState()
-    val isPlaying      by playerController.isPlaying.collectAsState()
-    val isTimerRunning by sleepTimerManager.isTimerRunning.collectAsState()
-
-    // ── Startup: load trending ────────────────────────────────────────────────
+    // ── Startup: load trending ─────────────────────────────────────────────
     LaunchedEffect(Unit) {
         try {
             val fresh = JioSaavnApiClient.getTrendingSongs()
@@ -215,7 +220,7 @@ fun MainPlayerScreen(
         } catch (_: Exception) {}
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Search trigger ────────────────────────────────────────────────────
     fun triggerSearch(query: String) {
         if (query.length < 2) {
             songResults = emptyList(); albumResults = emptyList()
@@ -235,7 +240,7 @@ fun MainPlayerScreen(
         }
     }
 
-    // ── Layout ────────────────────────────────────────────────────────────────
+    // ── Layout ────────────────────────────────────────────────────────────
     Scaffold(
         containerColor = AmoledBlack,
         modifier = Modifier
@@ -253,7 +258,8 @@ fun MainPlayerScreen(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
             ) {
-                // ── Header ────────────────────────────────────────────────────
+
+                // ── Header ─────────────────────────────────────────────────
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -285,7 +291,6 @@ fun MainPlayerScreen(
                         }
                     }
 
-                    // Action Controls Pill
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = AmoledCard,
@@ -318,14 +323,16 @@ fun MainPlayerScreen(
                     }
                 }
 
-                // ── Search Bar ────────────────────────────────────────────────
+                // ── Search Bar ─────────────────────────────────────────────
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { query ->
                         searchQuery = query
                         triggerSearch(query)
                     },
-                    placeholder = { Text("Search songs, artists, albums, playlists...", color = TextSecondary) },
+                    placeholder = {
+                        Text("Search songs, artists, albums, playlists...", color = TextSecondary)
+                    },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -354,19 +361,19 @@ fun MainPlayerScreen(
                     keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = AmoledCard,
+                        focusedContainerColor   = AmoledCard,
                         unfocusedContainerColor = AmoledCard,
-                        focusedBorderColor = SaavnTeal,
-                        unfocusedBorderColor = Color(0xFF222222),
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        focusedBorderColor      = SaavnTeal,
+                        unfocusedBorderColor    = Color(0xFF222222),
+                        focusedTextColor        = TextPrimary,
+                        unfocusedTextColor      = TextPrimary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // ── Search Tabs (only in search mode) ─────────────────────────
+                // ── Tab bar (search mode only) ──────────────────────────────
                 if (searchQuery.length >= 2) {
                     SearchTabBar(
                         selectedTab = selectedTab,
@@ -375,7 +382,6 @@ fun MainPlayerScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 } else {
-                    // Section title for trending
                     Text(
                         text = "Trending Today (320 Kbps)",
                         fontSize = 16.sp,
@@ -385,27 +391,29 @@ fun MainPlayerScreen(
                     )
                 }
 
-                // ── Content body ─────────────────────────────────────────────
+                // ── Content ────────────────────────────────────────────────
                 if (isLoading) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
+                            .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(color = SaavnTeal)
                     }
                 } else if (searchQuery.length >= 2) {
-                    // ── Tabbed search results ────────────────────────────────
+                    // Tabbed search results — weight(1f) applied here in ColumnScope
                     when (selectedTab) {
                         0 -> SongList(
                             songs = songResults,
                             currentSong = currentSong,
                             isPlaying = isPlaying,
+                            modifier = Modifier.weight(1f),
                             onSongClick = { song -> playerController.playSong(song, songResults) }
                         )
                         1 -> AlbumList(
                             albums = albumResults,
+                            modifier = Modifier.weight(1f),
                             onAlbumClick = { album ->
                                 scope.launch {
                                     isLoading = true
@@ -417,6 +425,7 @@ fun MainPlayerScreen(
                         )
                         2 -> ArtistList(
                             artists = artistResults,
+                            modifier = Modifier.weight(1f),
                             onArtistClick = { artist ->
                                 scope.launch {
                                     isLoading = true
@@ -428,6 +437,7 @@ fun MainPlayerScreen(
                         )
                         3 -> PlaylistList(
                             playlists = playlistResults,
+                            modifier = Modifier.weight(1f),
                             onPlaylistClick = { playlist ->
                                 scope.launch {
                                     isLoading = true
@@ -439,17 +449,18 @@ fun MainPlayerScreen(
                         )
                     }
                 } else {
-                    // ── Trending song list ───────────────────────────────────
+                    // Trending
                     SongList(
                         songs = trendingSongs,
                         currentSong = currentSong,
                         isPlaying = isPlaying,
+                        modifier = Modifier.weight(1f),
                         onSongClick = { song -> playerController.playSong(song, trendingSongs) }
                     )
                 }
             }
 
-            // ── Bottom Mini-Player ────────────────────────────────────────────
+            // ── Bottom Mini-Player ──────────────────────────────────────────
             if (currentSong != null) {
                 Surface(
                     modifier = Modifier
@@ -516,7 +527,7 @@ fun MainPlayerScreen(
         }
     }
 
-    // ── Modal Sheets ──────────────────────────────────────────────────────────
+    // ── Modal Sheets ─────────────────────────────────────────────────────────
     if (showNowPlaying) {
         NowPlayingSheet(
             playerController = playerController,
@@ -578,7 +589,7 @@ private fun SearchTabBar(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Song list (shared by trending + song tab)
+// Song list  — modifier comes in from ColumnScope caller (carries weight(1f))
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -586,19 +597,18 @@ private fun SongList(
     songs: List<SongItem>,
     currentSong: SongItem?,
     isPlaying: Boolean,
+    modifier: Modifier = Modifier,
     onSongClick: (SongItem) -> Unit
 ) {
     if (songs.isEmpty()) {
-        EmptyState("No songs found")
+        EmptyState("No songs found", modifier)
         return
     }
     LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(songs) { song ->
+        items(songs, key = { it.id }) { song ->
             SongRowItem(
                 song = song,
                 isCurrentlyPlaying = currentSong?.id == song.id && isPlaying,
@@ -614,18 +624,20 @@ private fun SongList(
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun AlbumList(albums: List<AlbumItem>, onAlbumClick: (AlbumItem) -> Unit) {
+private fun AlbumList(
+    albums: List<AlbumItem>,
+    modifier: Modifier = Modifier,
+    onAlbumClick: (AlbumItem) -> Unit
+) {
     if (albums.isEmpty()) {
-        EmptyState("No albums found")
+        EmptyState("No albums found", modifier)
         return
     }
     LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(albums) { album ->
+        items(albums, key = { it.id }) { album ->
             AlbumCard(album = album, onClick = { onAlbumClick(album) })
         }
         item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -703,18 +715,20 @@ private fun AlbumCard(album: AlbumItem, onClick: () -> Unit) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ArtistList(artists: List<ArtistItem>, onArtistClick: (ArtistItem) -> Unit) {
+private fun ArtistList(
+    artists: List<ArtistItem>,
+    modifier: Modifier = Modifier,
+    onArtistClick: (ArtistItem) -> Unit
+) {
     if (artists.isEmpty()) {
-        EmptyState("No artists found")
+        EmptyState("No artists found", modifier)
         return
     }
     LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(artists) { artist ->
+        items(artists, key = { it.id }) { artist ->
             ArtistCard(artist = artist, onClick = { onArtistClick(artist) })
         }
         item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -771,20 +785,14 @@ private fun ArtistCard(artist: ArtistItem, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (artist.followerCount.isNotEmpty()) {
-                    Text(
-                        text = "${formatFollowers(artist.followerCount)} followers",
-                        fontSize = 13.sp,
-                        color = TextSecondary,
-                        maxLines = 1
-                    )
-                } else {
-                    Text(
-                        text = "Artist",
-                        fontSize = 13.sp,
-                        color = TextSecondary
-                    )
-                }
+                Text(
+                    text = if (artist.followerCount.isNotEmpty())
+                        "${formatFollowers(artist.followerCount)} followers"
+                    else "Artist",
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                    maxLines = 1
+                )
             }
             Box(
                 modifier = Modifier
@@ -808,18 +816,20 @@ private fun ArtistCard(artist: ArtistItem, onClick: () -> Unit) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PlaylistList(playlists: List<PlaylistItem>, onPlaylistClick: (PlaylistItem) -> Unit) {
+private fun PlaylistList(
+    playlists: List<PlaylistItem>,
+    modifier: Modifier = Modifier,
+    onPlaylistClick: (PlaylistItem) -> Unit
+) {
     if (playlists.isEmpty()) {
-        EmptyState("No playlists found")
+        EmptyState("No playlists found", modifier)
         return
     }
     LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(playlists) { playlist ->
+        items(playlists, key = { it.id }) { playlist ->
             PlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) })
         }
         item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -908,7 +918,7 @@ private fun PlaylistCard(playlist: PlaylistItem, onClick: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared SongRowItem (unchanged public API)
+// Shared: SongRowItem  (public — used by trending + song search)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -978,9 +988,9 @@ fun SongRowItem(
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun EmptyState(message: String) {
+private fun EmptyState(message: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(160.dp),
         contentAlignment = Alignment.Center

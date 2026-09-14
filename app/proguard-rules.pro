@@ -6,7 +6,23 @@
     public static int i(...);
 }
 
-# Preserve JavaScript Interfaces for WebView DOM Bridge
+# ── Data models — keep all fields for JSON deserialization ───────────────────
+-keep class com.brave.jsabmusic.api.model.** { *; }
+
+# ── OkHttp — required for network calls ──────────────────────────────────────
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+
+# ── Kotlin coroutines ─────────────────────────────────────────────────────────
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-keepclassmembernames class kotlinx.** {
+    volatile <fields>;
+}
+
+# ── Preserve JavaScript Interfaces for WebView DOM Bridge ────────────────────
 -keepattributes JavascriptInterface
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
@@ -18,19 +34,19 @@
     public <fields>;
 }
 
-# Preserve AndroidX Media & MediaSession
+# ── Preserve AndroidX Media & MediaSession ────────────────────────────────────
 -keep class androidx.media.** { *; }
 -keep class android.support.v4.media.** { *; }
 -keep class android.support.v4.media.session.** { *; }
 
-# Jetpack Compose and Coroutines Rules
+# ── Jetpack Compose and Coroutines Rules ──────────────────────────────────────
 -keep class androidx.compose.runtime.** { *; }
 -keep class kotlinx.coroutines.** { *; }
 
-# WebKit Keep rules
+# ── WebKit Keep rules ──────────────────────────────────────────────────────────
 -keep class androidx.webkit.** { *; }
 
-# Aggressive Optimization flags
+# ── Aggressive Optimization flags ─────────────────────────────────────────────
 -repackageclasses 'com.brave.jsabmusic.internal'
 -allowaccessmodification
 -mergeinterfacesaggressively
