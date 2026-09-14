@@ -40,8 +40,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v2.0.2-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v2.0.2-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v2.1.0-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v2.1.0-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -54,24 +54,29 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v2.0.2
-          name: "JSABMusic v2.0.2 (Verified 320kbps Akamai CDN & Deep Schema Parser)"
+          tag_name: v2.1.0
+          name: "JSABMusic v2.1.0 — Bifurcated Search (Songs · Albums · Artists · Playlists)"
           body: |
-            ### 🎵 JSABMusic v2.0.2 — Pure Native Media3 Audio Player for JioSaavn
+            ### 🎵 JSABMusic v2.1.0 — Bifurcated Search Engine
             **Engineered for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
 
-            #### 🚀 Enhancements & Fixes in v2.0.2:
-            - 🔑 **Verified DES Key Implementation:** Integrated open-source reference key (`38346591`) unlocking pristine 320 kbps uncompressed AAC/MP4 direct streams from Akamai/Cloudflare CDNs (`saavncdn.com`).
-            - 📊 **Deep `more_info` Schema Resolution:** Fixed JSON payload extraction to pull `encrypted_media_url`, `primary_artists`, and `duration` from nested API structures.
-            - 🛡️ **Zero Startup ANR / Watchdog Hangs:** Completely decoupled foreground service initialization using non-blocking asynchronous binding.
-            - 🔊 **Studio Audio HAL Equalizer:** Hardware 5-Band DSP Equalizer and Sub-Bass Boost (+10 dB) attached directly to the native audio session.
-            - 🌙 **Screen-Off Background Playback:** Fully compliant with Android 14/15/16 background media standards with lock screen scrubber and Bluetooth controls.
+            #### 🚀 What's New in v2.1.0:
+            - 🔍 **Tabbed Search Results:** Search now bifurcates results into four dedicated tabs — **Songs**, **Albums**, **Artists**, and **Playlists** — eliminating duplicate tracks caused by song-only search.
+            - ⚡ **Parallel API Queries:** All four JioSaavn search endpoints (`search.getResults`, `search.getAlbumResults`, `search.getArtistResults`, `search.getPlaylistResults`) fire simultaneously using Kotlin coroutines for instant results.
+            - 💿 **Album Drill-Down:** Tapping an album card fetches its full track list (`content.getAlbumDetails`) and queues it for gapless playback.
+            - 🎤 **Artist Drill-Down:** Tapping an artist card fetches their top songs (`artist.getArtistPageDetails`) and starts playback.
+            - 📋 **Playlist Drill-Down:** Tapping a playlist card fetches all its songs (`playlist.getDetails`) and starts playback.
+            - 🔢 **Follower & Track Count Badges:** Albums show track count, Artists show formatted follower count (K/M), Playlists show songs + followers.
+            - 🌊 **Trending Screen Unchanged:** Home screen trending songs list is completely unaffected.
+
+            #### Previous Release (v2.0.2) Highlights:
+            - 🔑 Verified DES 320 kbps key, deep `more_info` schema, Hardware EQ, Background Playback.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v2.0.2-release.apk`** below, tap to install, and enjoy instant, crash-free JioSaavn audio!
+            Download **`JSABMusic-v2.1.0-release.apk`** below, tap to install, and enjoy instant, crash-free JioSaavn audio with proper categorized search!
           files: |
-            dist/JSABMusic-v2.0.2-release.apk
-            dist/JSABMusic-v2.0.2-debug.apk
+            dist/JSABMusic-v2.1.0-release.apk
+            dist/JSABMusic-v2.1.0-debug.apk
           draft: false
           prerelease: false
         env:

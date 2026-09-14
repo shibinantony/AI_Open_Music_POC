@@ -1,7 +1,13 @@
 package com.brave.jsabmusic.api
 
+import com.brave.jsabmusic.api.model.AlbumItem
+import com.brave.jsabmusic.api.model.ArtistItem
+import com.brave.jsabmusic.api.model.PlaylistItem
+import com.brave.jsabmusic.api.model.SearchResults
 import com.brave.jsabmusic.api.model.SongItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,6 +29,33 @@ object JioSaavnApiClient {
         .build()
 
     private const val BASE_URL = "https://www.jiosaavn.com/api.php"
+    private val BROWSER_UA =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Parallel search — all four categories at once
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fires all four search endpoints in parallel and returns an aggregate [SearchResults].
+     */
+    suspend fun searchAll(query: String): SearchResults = coroutineScope {
+        if (query.trim().isEmpty()) return@coroutineScope SearchResults()
+        val songsDeferred     = async { searchSongs(query) }
+        val albumsDeferred    = async { searchAlbums(query) }
+        val artistsDeferred   = async { searchArtists(query) }
+        val playlistsDeferred = async { searchPlaylists(query) }
+        SearchResults(
+            songs     = songsDeferred.await(),
+            albums    = albumsDeferred.await(),
+            artists   = artistsDeferred.await(),
+            playlists = playlistsDeferred.await()
+        )
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Per-category search
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Searches JioSaavn for tracks matching the query and resolves 320 kbps stream links.
@@ -30,36 +63,145 @@ object JioSaavnApiClient {
     suspend fun searchSongs(query: String): List<SongItem> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<SongItem>()
         if (query.trim().isEmpty()) return@withContext songs
-
         try {
             val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
             val url = "$BASE_URL?__call=search.getResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=25"
-
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext songs
-                val body = response.body?.string() ?: return@withContext songs
-
-                val json = JSONObject(body)
-                val results = json.optJSONArray("results") ?: return@withContext songs
-
-                for (i in 0 until results.length()) {
-                    val obj = results.optJSONObject(i) ?: continue
-                    val song = parseSongJson(obj)
-                    if (song != null) {
-                        songs.add(song)
-                    }
-                }
+            val body = getJson(url) ?: return@withContext songs
+            val results = JSONObject(body).optJSONArray("results") ?: return@withContext songs
+            for (i in 0 until results.length()) {
+                val song = parseSongJson(results.optJSONObject(i) ?: continue)
+                if (song != null) songs.add(song)
             }
-        } catch (e: Exception) {
-            // Log and return parsed
-        }
-        return@withContext songs
+        } catch (_: Exception) {}
+        songs
     }
+
+    /**
+     * Searches JioSaavn for albums matching the query.
+     */
+    suspend fun searchAlbums(query: String): List<AlbumItem> = withContext(Dispatchers.IO) {
+        val albums = mutableListOf<AlbumItem>()
+        if (query.trim().isEmpty()) return@withContext albums
+        try {
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            val url = "$BASE_URL?__call=search.getAlbumResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=15"
+            val body = getJson(url) ?: return@withContext albums
+            val results = JSONObject(body).optJSONArray("results") ?: return@withContext albums
+            for (i in 0 until results.length()) {
+                val album = parseAlbumJson(results.optJSONObject(i) ?: continue)
+                if (album != null) albums.add(album)
+            }
+        } catch (_: Exception) {}
+        albums
+    }
+
+    /**
+     * Searches JioSaavn for artists matching the query.
+     */
+    suspend fun searchArtists(query: String): List<ArtistItem> = withContext(Dispatchers.IO) {
+        val artists = mutableListOf<ArtistItem>()
+        if (query.trim().isEmpty()) return@withContext artists
+        try {
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            val url = "$BASE_URL?__call=search.getArtistResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=10"
+            val body = getJson(url) ?: return@withContext artists
+            val results = JSONObject(body).optJSONArray("results") ?: return@withContext artists
+            for (i in 0 until results.length()) {
+                val artist = parseArtistJson(results.optJSONObject(i) ?: continue)
+                if (artist != null) artists.add(artist)
+            }
+        } catch (_: Exception) {}
+        artists
+    }
+
+    /**
+     * Searches JioSaavn for playlists matching the query.
+     */
+    suspend fun searchPlaylists(query: String): List<PlaylistItem> = withContext(Dispatchers.IO) {
+        val playlists = mutableListOf<PlaylistItem>()
+        if (query.trim().isEmpty()) return@withContext playlists
+        try {
+            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            val url = "$BASE_URL?__call=search.getPlaylistResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=15"
+            val body = getJson(url) ?: return@withContext playlists
+            val results = JSONObject(body).optJSONArray("results") ?: return@withContext playlists
+            for (i in 0 until results.length()) {
+                val playlist = parsePlaylistJson(results.optJSONObject(i) ?: continue)
+                if (playlist != null) playlists.add(playlist)
+            }
+        } catch (_: Exception) {}
+        playlists
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Drill-down: fetch songs from an album / artist / playlist
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fetches all songs for a given album ID.
+     */
+    suspend fun getAlbumSongs(albumId: String): List<SongItem> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<SongItem>()
+        try {
+            val url = "$BASE_URL?__call=content.getAlbumDetails&albumid=$albumId&_format=json&_marker=0&api_version=4"
+            val body = getJson(url) ?: return@withContext songs
+            val json = JSONObject(body)
+            val list = json.optJSONArray("list") ?: json.optJSONArray("songs") ?: return@withContext songs
+            for (i in 0 until list.length()) {
+                val song = parseSongJson(list.optJSONObject(i) ?: continue)
+                if (song != null) songs.add(song)
+            }
+        } catch (_: Exception) {}
+        songs
+    }
+
+    /**
+     * Fetches top songs for a given artist ID.
+     */
+    suspend fun getArtistSongs(artistId: String): List<SongItem> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<SongItem>()
+        try {
+            val url = "$BASE_URL?__call=artist.getArtistPageDetails&artistId=$artistId&_format=json&_marker=0&api_version=4&page=0&category=latest&sort_order=desc&includeMetaTags=0"
+            val body = getJson(url) ?: return@withContext songs
+            val json = JSONObject(body)
+            // Top songs live inside topSongs array
+            val topSongsObj = json.optJSONObject("topSongs")
+            val list = topSongsObj?.optJSONArray("songs")
+                ?: json.optJSONArray("topSongs")
+                ?: json.optJSONArray("songs")
+                ?: return@withContext songs
+            for (i in 0 until list.length()) {
+                val song = parseSongJson(list.optJSONObject(i) ?: continue)
+                if (song != null) songs.add(song)
+            }
+        } catch (_: Exception) {}
+        songs
+    }
+
+    /**
+     * Fetches all songs for a given playlist ID (list ID).
+     */
+    suspend fun getPlaylistSongs(listId: String): List<SongItem> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<SongItem>()
+        try {
+            val url = "$BASE_URL?__call=playlist.getDetails&listid=$listId&_format=json&_marker=0&api_version=4"
+            val body = getJson(url) ?: return@withContext songs
+            val json = JSONObject(body)
+            val list = json.optJSONArray("list")
+                ?: json.optJSONArray("songs")
+                ?: json.optJSONObject("more_info")?.optJSONArray("songs")
+                ?: return@withContext songs
+            for (i in 0 until list.length()) {
+                val song = parseSongJson(list.optJSONObject(i) ?: continue)
+                if (song != null) songs.add(song)
+            }
+        } catch (_: Exception) {}
+        songs
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Trending
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Fetches top trending / viral tracks currently charting on JioSaavn.
@@ -72,40 +214,12 @@ object JioSaavnApiClient {
 
         for (listId in trendingPlaylistIds) {
             try {
-                val url = "$BASE_URL?__call=playlist.getDetails&listid=$listId&_format=json&_marker=0&api_version=4"
-                val request = Request.Builder()
-                    .url(url)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string() ?: ""
-                        if (body.isNotEmpty()) {
-                            val json = JSONObject(body)
-                            val list = json.optJSONArray("list")
-                                ?: json.optJSONArray("songs")
-                                ?: json.optJSONObject("more_info")?.optJSONArray("songs")
-
-                            if (list != null && list.length() > 0) {
-                                for (i in 0 until list.length()) {
-                                    val obj = list.optJSONObject(i) ?: continue
-                                    val song = parseSongJson(obj)
-                                    if (song != null) {
-                                        songs.add(song)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                val fetched = getPlaylistSongs(listId)
+                if (fetched.isNotEmpty()) {
+                    songs.addAll(fetched)
+                    break
                 }
-
-                if (songs.isNotEmpty()) {
-                    break // Successfully populated
-                }
-            } catch (e: Exception) {
-                // Try next playlist
-            }
+            } catch (_: Exception) {}
         }
 
         // Fallback: search for top hits if playlist endpoint had transient issue
@@ -115,7 +229,7 @@ object JioSaavnApiClient {
             return@withContext getCuratedDefaultSongs()
         }
 
-        return@withContext songs
+        songs
     }
 
     /**
@@ -161,6 +275,10 @@ object JioSaavnApiClient {
             )
         )
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Parsers
+    // ─────────────────────────────────────────────────────────────────────────
 
     private fun parseSongJson(obj: JSONObject): SongItem? {
         val moreInfo = obj.optJSONObject("more_info")
@@ -219,6 +337,58 @@ object JioSaavnApiClient {
             mediaPreviewUrl = mediaPreviewUrl,
             directStreamUrl = streamUrl
         )
+    }
+
+    private fun parseAlbumJson(obj: JSONObject): AlbumItem? {
+        val moreInfo = obj.optJSONObject("more_info")
+        val id = obj.optString("id").ifEmpty { return null }
+        val name = unescapeHtml(obj.optString("title").ifEmpty { obj.optString("album_id") }).ifEmpty { return null }
+        val year = moreInfo?.optString("year") ?: obj.optString("year")
+        val rawArtist = moreInfo?.optString("primary_artists")
+            ?: moreInfo?.optString("music")
+            ?: obj.optString("primary_artists")
+            ?: obj.optString("music")
+        val artist = unescapeHtml(rawArtist)
+        val rawImage = obj.optString("image").ifEmpty { moreInfo?.optString("image") ?: "" }
+        val artwork = MediaUrlResolver.upgradeArtworkUrl(rawImage)
+        val songCount = moreInfo?.optInt("song_count") ?: obj.optInt("song_count", 0)
+        return AlbumItem(id = id, name = name, year = year, artist = artist, artworkUrl = artwork, songCount = songCount)
+    }
+
+    private fun parseArtistJson(obj: JSONObject): ArtistItem? {
+        val id = obj.optString("id").ifEmpty { obj.optString("artistid") }.ifEmpty { return null }
+        val name = unescapeHtml(obj.optString("title").ifEmpty { obj.optString("name") }).ifEmpty { return null }
+        val rawImage = obj.optString("image").ifEmpty { "" }
+        val artwork = MediaUrlResolver.upgradeArtworkUrl(rawImage)
+        val followers = obj.optJSONObject("more_info")?.optString("follower_count") ?: ""
+        return ArtistItem(id = id, name = name, artworkUrl = artwork, followerCount = followers)
+    }
+
+    private fun parsePlaylistJson(obj: JSONObject): PlaylistItem? {
+        val moreInfo = obj.optJSONObject("more_info")
+        val id = obj.optString("id").ifEmpty { return null }
+        val name = unescapeHtml(obj.optString("title")).ifEmpty { return null }
+        val rawImage = obj.optString("image").ifEmpty { moreInfo?.optString("image") ?: "" }
+        val artwork = MediaUrlResolver.upgradeArtworkUrl(rawImage)
+        val songCount = moreInfo?.optInt("song_count") ?: obj.optInt("song_count", 0)
+        val followers = moreInfo?.optString("follower_count") ?: obj.optString("follower_count")
+        return PlaylistItem(id = id, name = name, artworkUrl = artwork, songCount = songCount, followerCount = followers)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HTTP helper
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun getJson(url: String): String? {
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", BROWSER_UA)
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) null else response.body?.string()
+            }
+        } catch (_: Exception) { null }
     }
 
     private fun unescapeHtml(input: String): String {
