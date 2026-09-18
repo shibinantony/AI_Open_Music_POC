@@ -8,9 +8,7 @@
     {
       "client_info": {
         "mobilesdk_app_id": "1:1085293847291:android:72d8a5e89bf16c39a01f4c",
-        "android_client_info": {
-          "package_name": "com.brave.jsabmusic"
-        }
+        "android_client_info": {"package_name": "com.brave.jsabmusic"}
       },
       "oauth_client": [
         {
@@ -26,16 +24,17 @@
           "client_type": 3
         }
       ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyB3_ExampleFirebaseKeyForJSABMusic2026"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
+      "api_key": [{"current_key": "AIzaSyB3_ExampleFirebaseKeyForJSABMusic2026"}],
+      "services": {"appinvite_service": {"other_platform_oauth_client": []}}
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1085293847291:android:72d8a5e89bf16c39a01f4c",
+        "android_client_info": {"package_name": "com.brave.jsabmusic.debug"}
+      },
+      "oauth_client": [],
+      "api_key": [{"current_key": "AIzaSyB3_ExampleFirebaseKeyForJSABMusic2026"}],
+      "services": {"appinvite_service": {"other_platform_oauth_client": []}}
     }
   ],
   "configuration_version": "1"
