@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -270,9 +271,9 @@ fun MainPlayerScreen(
             val idToken = account.idToken
             if (idToken != null) {
                 val credential = GoogleAuthProvider.getCredential(idToken, null)
-                firebaseSyncManager.signInWithGoogle(credential) { success, _ ->
+                firebaseSyncManager.signInWithGoogle(credential) { success, errMsg ->
                     if (success) {
-                        // After signing in, auto-restore last session if not currently playing
+                        android.widget.Toast.makeText(context, "Welcome back, ${account.displayName ?: "Listener"}!", android.widget.Toast.LENGTH_SHORT).show()
                         scope.launch {
                             val restored = firebaseSyncManager.restoreLastSession()
                             if (restored != null && playerController.currentSong.value == null) {
@@ -280,10 +281,26 @@ fun MainPlayerScreen(
                                 playerController.exoPlayer.pause()
                             }
                         }
+                    } else {
+                        android.widget.Toast.makeText(context, "Firebase: ${errMsg ?: "Verification error"}. Sovereign session active.", android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
+            } else {
+                val name = account.displayName ?: "Google User"
+                val email = account.email ?: ""
+                firebaseSyncManager.signInWithProfile(name, email, account.photoUrl?.toString())
+                android.widget.Toast.makeText(context, "Signed in as $name", android.widget.Toast.LENGTH_SHORT).show()
             }
-        } catch (_: Exception) {}
+        } catch (e: ApiException) {
+            val hint = when (e.statusCode) {
+                10 -> "Google Auth Developer Error 10: SHA-1 certificate fingerprint needed in Firebase. Sovereign Cloud Profile remains active."
+                12500 -> "Google Sign-In cancelled or unavailable on device."
+                else -> "Sign-in (${e.statusCode}): ${e.localizedMessage ?: "Please try Sovereign Cloud Profile"}"
+            }
+            android.widget.Toast.makeText(context, hint, android.widget.Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(context, "Sign-in error: ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     // ── Startup: load trending & restore cloud session on reinstall ──────────
@@ -575,6 +592,7 @@ fun MainPlayerScreen(
                                     songs = songResults,
                                     currentSong = currentSong,
                                     isPlaying = isPlaying,
+                                    likedSongs = likedSongs,
                                     firebaseSyncManager = firebaseSyncManager,
                                     modifier = Modifier.weight(1f),
                                     onSongClick = { song -> playerController.playSong(song, songResults) }
@@ -621,6 +639,7 @@ fun MainPlayerScreen(
                                 songs = trendingSongs,
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
+                                likedSongs = likedSongs,
                                 firebaseSyncManager = firebaseSyncManager,
                                 modifier = Modifier.weight(1f),
                                 onSongClick = { song -> playerController.playSong(song, trendingSongs) }
@@ -639,6 +658,7 @@ fun MainPlayerScreen(
                             songs = likedSongs,
                             currentSong = currentSong,
                             isPlaying = isPlaying,
+                            likedSongs = likedSongs,
                             firebaseSyncManager = firebaseSyncManager,
                             emptyMessage = "No liked songs yet. Tap the heart on any song to add it here!",
                             modifier = Modifier.weight(1f),
@@ -657,6 +677,7 @@ fun MainPlayerScreen(
                             songs = recentlyListened,
                             currentSong = currentSong,
                             isPlaying = isPlaying,
+                            likedSongs = likedSongs,
                             firebaseSyncManager = firebaseSyncManager,
                             emptyMessage = "No songs listened in the last 7 days. Play music to track history!",
                             modifier = Modifier.weight(1f),
@@ -782,13 +803,26 @@ fun MainPlayerScreen(
             firebaseSyncManager = firebaseSyncManager,
             onSignInClick = {
                 try {
+                    val defaultClientId = try {
+                        val idRes = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+                        if (idRes != 0) context.getString(idRes) else ""
+                    } catch (_: Exception) { "" }
+
+                    val webClientId = if (defaultClientId.isNotEmpty()) {
+                        defaultClientId
+                    } else {
+                        "1085293847291-webclientidforgooglesignin012345.apps.googleusercontent.com"
+                    }
+
                     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                        .requestIdToken("1085293847291-webclientidforgooglesignin012345.apps.googleusercontent.com")
+                        .requestIdToken(webClientId)
                         .requestEmail()
                         .build()
                     val signInClient = GoogleSignIn.getClient(context, gso)
                     googleSignInLauncher.launch(signInClient.signInIntent)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "Sign-In Error: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
+                }
             },
             onDismissRequest = { showUserProfile = false }
         )
@@ -1003,7 +1037,9 @@ private fun UserProfileSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Action: Google Sign In or Sign Out
+            // Action: Google Sign In, Cloud Profile Setup, or Sign Out
+            var showProfileDialog by remember { mutableStateOf(false) }
+
             if (user == null || user?.isAnonymous == true) {
                 Button(
                     onClick = {
@@ -1018,6 +1054,22 @@ private fun UserProfileSheet(
                         text = "Sign In with Google",
                         color = AmoledBlack,
                         fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = { showProfileDialog = true },
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, SovereignBlue),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Set Cloud Profile & Sync DB",
+                        color = SovereignBlue,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
                     )
                 }
@@ -1037,6 +1089,74 @@ private fun UserProfileSheet(
                         fontSize = 14.sp
                     )
                 }
+            }
+
+            if (showProfileDialog) {
+                var inputName by remember { mutableStateOf(if (user?.isAnonymous == false) (user?.displayName ?: "") else "") }
+                var inputEmail by remember { mutableStateOf(user?.email ?: "") }
+
+                AlertDialog(
+                    onDismissRequest = { showProfileDialog = false },
+                    containerColor = AmoledCard,
+                    title = {
+                        Text(text = "Sovereign Cloud Profile", color = TextPrimary, fontWeight = FontWeight.Bold)
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = "Set your profile name and email to establish your database and synchronize liked music & listening history to Cloud Firestore.",
+                                color = TextSecondary,
+                                fontSize = 13.sp
+                            )
+                            OutlinedTextField(
+                                value = inputName,
+                                onValueChange = { inputName = it },
+                                label = { Text("Display Name") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = SovereignBlue,
+                                    unfocusedBorderColor = Color(0xFF1E293B),
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = inputEmail,
+                                onValueChange = { inputEmail = it },
+                                label = { Text("Email (Optional)") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = SovereignBlue,
+                                    unfocusedBorderColor = Color(0xFF1E293B),
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val name = inputName.trim().ifEmpty { "Sovereign Listener" }
+                                val email = inputEmail.trim()
+                                firebaseSyncManager.signInWithProfile(name, email)
+                                showProfileDialog = false
+                                onDismissRequest()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SovereignBlue)
+                        ) {
+                            Text("Create & Sync DB", color = AmoledBlack, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { showProfileDialog = false },
+                            border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        ) {
+                            Text("Cancel", color = TextSecondary)
+                        }
+                    }
+                )
             }
         }
     }
@@ -1090,6 +1210,7 @@ private fun SongList(
     songs: List<SongItem>,
     currentSong: SongItem?,
     isPlaying: Boolean,
+    likedSongs: List<SongItem>,
     firebaseSyncManager: FirebaseSyncManager,
     emptyMessage: String = "No songs found",
     modifier: Modifier = Modifier,
@@ -1099,6 +1220,8 @@ private fun SongList(
         EmptyState(emptyMessage, modifier)
         return
     }
+    val likedIds = remember(likedSongs) { likedSongs.map { it.id }.toSet() }
+
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1107,7 +1230,7 @@ private fun SongList(
             SongRowItem(
                 song = song,
                 isCurrentlyPlaying = currentSong?.id == song.id && isPlaying,
-                isLiked = firebaseSyncManager.isLiked(song.id),
+                isLiked = likedIds.contains(song.id),
                 onLikeToggle = { firebaseSyncManager.toggleLike(song) },
                 onClick = { onSongClick(song) }
             )

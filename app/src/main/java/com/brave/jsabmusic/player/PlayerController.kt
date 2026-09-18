@@ -93,9 +93,42 @@ class PlayerController(private val context: Context) {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
                     _durationMs.value = exoPlayer.duration.coerceAtLeast(0L)
+                } else if (playbackState == Player.STATE_ENDED) {
+                    when (_repeatMode.value) {
+                        Player.REPEAT_MODE_ONE -> {
+                            exoPlayer.seekTo(0L)
+                            exoPlayer.play()
+                        }
+                        Player.REPEAT_MODE_ALL -> {
+                            if (_queue.value.isNotEmpty()) {
+                                exoPlayer.seekToDefaultPosition(0)
+                                exoPlayer.play()
+                            }
+                        }
+                    }
                 }
             }
         })
+    }
+
+    private fun createMediaItem(item: SongItem): MediaItem? {
+        if (item.directStreamUrl.isEmpty()) return null
+        val metadata = MediaMetadata.Builder()
+            .setTitle(item.title)
+            .setArtist(item.artist)
+            .setAlbumTitle(item.album)
+            .apply {
+                if (item.highResArtworkUrl.isNotEmpty()) {
+                    setArtworkUri(Uri.parse(item.highResArtworkUrl))
+                }
+            }
+            .build()
+
+        return MediaItem.Builder()
+            .setMediaId(item.id)
+            .setUri(item.directStreamUrl)
+            .setMediaMetadata(metadata)
+            .build()
     }
 
     fun playSong(song: SongItem, playlist: List<SongItem> = listOf(song)) {
@@ -106,62 +139,57 @@ class PlayerController(private val context: Context) {
 
             exoPlayer.clearMediaItems()
 
-            // Enqueue media items for continuous gapless playlist streaming
-            val mediaItems = playlist.mapNotNull { item ->
-                if (item.directStreamUrl.isEmpty()) return@mapNotNull null
-                val metadata = MediaMetadata.Builder()
-                    .setTitle(item.title)
-                    .setArtist(item.artist)
-                    .setAlbumTitle(item.album)
-                    .apply {
-                        if (item.highResArtworkUrl.isNotEmpty()) {
-                            setArtworkUri(Uri.parse(item.highResArtworkUrl))
-                        }
-                    }
-                    .build()
-
-                MediaItem.Builder()
-                    .setMediaId(item.id)
-                    .setUri(item.directStreamUrl)
-                    .setMediaMetadata(metadata)
-                    .build()
-            }
+            val mediaItems = playlist.mapNotNull { createMediaItem(it) }
 
             if (mediaItems.isNotEmpty()) {
                 val safeIndex = currentIndex.coerceIn(0, mediaItems.size - 1)
                 exoPlayer.setMediaItems(mediaItems, safeIndex, 0L)
+                exoPlayer.repeatMode = _repeatMode.value
+                exoPlayer.shuffleModeEnabled = _shuffleModeEnabled.value
                 exoPlayer.prepare()
                 exoPlayer.play()
-                // onSongStarted is invoked by onMediaItemTransition — no duplicate call here
             }
         } catch (e: Exception) {
             android.util.Log.e("PlayerController", "Playback failed", e)
         }
     }
 
-    /** Plays an entire playlist from the beginning, optionally with shuffle enabled */
+    /** Plays an entire playlist, truly shuffling the queue if shuffle is enabled */
     fun playAll(playlist: List<SongItem>, shuffle: Boolean = false) {
         if (playlist.isEmpty()) return
-        exoPlayer.shuffleModeEnabled = shuffle
         _shuffleModeEnabled.value = shuffle
-        val startIndex = if (shuffle) (0 until playlist.size).random() else 0
-        playSong(playlist[startIndex], playlist)
+        exoPlayer.shuffleModeEnabled = shuffle
+
+        val targetQueue = if (shuffle) playlist.shuffled() else playlist
+        playSong(targetQueue.first(), targetQueue)
     }
 
     fun toggleShuffle() {
-        val nextState = !exoPlayer.shuffleModeEnabled
-        exoPlayer.shuffleModeEnabled = nextState
+        val nextState = !_shuffleModeEnabled.value
         _shuffleModeEnabled.value = nextState
+        exoPlayer.shuffleModeEnabled = nextState
+
+        val current = _currentSong.value
+        val currentQ = _queue.value
+        if (nextState && current != null && currentQ.size > 1) {
+            val remaining = currentQ.filter { it.id != current.id }.shuffled()
+            val newQueue = listOf(current) + remaining
+            _queue.value = newQueue
+
+            val currentPos = exoPlayer.currentPosition
+            val mediaItems = newQueue.mapNotNull { createMediaItem(it) }
+            exoPlayer.setMediaItems(mediaItems, 0, currentPos)
+        }
     }
 
     fun cycleRepeatMode() {
-        val nextMode = when (exoPlayer.repeatMode) {
+        val nextMode = when (_repeatMode.value) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
             Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
             else -> Player.REPEAT_MODE_OFF
         }
-        exoPlayer.repeatMode = nextMode
         _repeatMode.value = nextMode
+        exoPlayer.repeatMode = nextMode
     }
 
     fun togglePlay() {
@@ -173,14 +201,36 @@ class PlayerController(private val context: Context) {
     }
 
     fun skipNext() {
+        if (_queue.value.isEmpty()) return
+
+        if (_repeatMode.value == Player.REPEAT_MODE_ONE) {
+            val nextIndex = (currentIndex + 1) % _queue.value.size
+            playSong(_queue.value[nextIndex], _queue.value)
+            return
+        }
+
         if (exoPlayer.hasNextMediaItem()) {
             exoPlayer.seekToNextMediaItem()
+        } else if ((_repeatMode.value == Player.REPEAT_MODE_ALL || _shuffleModeEnabled.value) && _queue.value.isNotEmpty()) {
+            exoPlayer.seekToDefaultPosition(0)
+            exoPlayer.play()
         }
     }
 
     fun skipPrevious() {
+        if (_queue.value.isEmpty()) return
+
+        if (exoPlayer.currentPosition > 3000L) {
+            exoPlayer.seekTo(0L)
+            return
+        }
+
         if (exoPlayer.hasPreviousMediaItem()) {
             exoPlayer.seekToPreviousMediaItem()
+        } else if (_repeatMode.value == Player.REPEAT_MODE_ALL && _queue.value.isNotEmpty()) {
+            val lastIndex = _queue.value.size - 1
+            exoPlayer.seekToDefaultPosition(lastIndex)
+            exoPlayer.play()
         } else {
             exoPlayer.seekTo(0L)
         }

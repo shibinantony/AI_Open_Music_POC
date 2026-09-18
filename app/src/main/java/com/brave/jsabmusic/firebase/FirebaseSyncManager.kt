@@ -3,13 +3,14 @@ package com.brave.jsabmusic.firebase
 import android.content.Context
 import android.util.Log
 import com.brave.jsabmusic.api.model.SongItem
+import com.brave.jsabmusic.storage.LocalMusicStore
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,32 +21,57 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
+ * Unified user model representing active session credentials.
+ */
+data class SovereignUser(
+    val uid: String,
+    val displayName: String?,
+    val email: String?,
+    val photoUrl: String?,
+    val isAnonymous: Boolean = false
+)
+
+/**
  * Enterprise Cloud Persistence and Authentication Manager for JSABMusic.
- * Orchestrates Google Sign-In, Firebase Auth, Real-Time Cloud Firestore Sync for
- * Liked Music, 7-Day Listening History retention, and cloud session restoration on app reinstall.
+ * Orchestrates Google Sign-In, Firebase Auth, Real-Time Cloud Firestore Sync,
+ * and robust Local Persistence fallback for Liked Music, 7-Day History, and Session Restoration.
  */
 class FirebaseSyncManager(private val context: Context) {
 
     private val tag = "FirebaseSyncManager"
     private val scope = CoroutineScope(Dispatchers.IO + Job())
+    val localStore = LocalMusicStore(context)
 
     private var auth: FirebaseAuth? = null
     private var firestore: FirebaseFirestore? = null
 
-    private val _currentUser = MutableStateFlow<FirebaseUser?>(null)
-    val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
+    private val _currentUser = MutableStateFlow<SovereignUser?>(null)
+    val currentUser: StateFlow<SovereignUser?> = _currentUser.asStateFlow()
 
-    private val _likedSongs = MutableStateFlow<List<SongItem>>(emptyList())
+    private val _likedSongs = MutableStateFlow<List<SongItem>>(localStore.getLikedSongs())
     val likedSongs: StateFlow<List<SongItem>> = _likedSongs.asStateFlow()
 
-    private val _recentlyListened = MutableStateFlow<List<SongItem>>(emptyList())
+    private val _recentlyListened = MutableStateFlow<List<SongItem>>(localStore.getRecentlyListened())
     val recentlyListened: StateFlow<List<SongItem>> = _recentlyListened.asStateFlow()
 
     private var likedListener: ListenerRegistration? = null
     private var historyListener: ListenerRegistration? = null
 
     init {
+        initLocalSession()
         initializeFirebase()
+    }
+
+    private fun initLocalSession() {
+        val profile = localStore.getUserProfile()
+        val name = profile.displayName ?: if (profile.isGuest) "Sovereign Guest" else "Sovereign Listener"
+        _currentUser.value = SovereignUser(
+            uid = profile.uid,
+            displayName = name,
+            email = profile.email,
+            photoUrl = profile.photoUrl,
+            isAnonymous = profile.isGuest
+        )
     }
 
     private fun initializeFirebase() {
@@ -57,16 +83,36 @@ class FirebaseSyncManager(private val context: Context) {
             firestore = FirebaseFirestore.getInstance()
 
             auth?.addAuthStateListener { firebaseAuth ->
-                val user = firebaseAuth.currentUser
-                _currentUser.value = user
-                if (user != null) {
-                    attachFirestoreListeners(user.uid)
+                val fbUser = firebaseAuth.currentUser
+                if (fbUser != null) {
+                    val sovUser = SovereignUser(
+                        uid = fbUser.uid,
+                        displayName = fbUser.displayName?.ifEmpty { null } ?: "Sovereign Listener",
+                        email = fbUser.email,
+                        photoUrl = fbUser.photoUrl?.toString(),
+                        isAnonymous = fbUser.isAnonymous
+                    )
+                    _currentUser.value = sovUser
+                    localStore.saveUserProfile(
+                        sovUser.uid, sovUser.displayName, sovUser.email, sovUser.photoUrl, sovUser.isAnonymous
+                    )
+                    syncAllToCloud(fbUser.uid)
+                    attachFirestoreListeners(fbUser.uid)
                 } else {
-                    // Sign in anonymously as a fallback guest session so data starts syncing immediately
+                    // Try anonymous fallback session if network / config allows
                     auth?.signInAnonymously()?.addOnCompleteListener { task ->
                         if (task.isSuccessful) {
                             task.result?.user?.let { guestUser ->
-                                _currentUser.value = guestUser
+                                val guestSov = SovereignUser(
+                                    uid = guestUser.uid,
+                                    displayName = "Sovereign Guest",
+                                    email = null,
+                                    photoUrl = null,
+                                    isAnonymous = true
+                                )
+                                _currentUser.value = guestSov
+                                localStore.saveUserProfile(guestSov.uid, guestSov.displayName, null, null, true)
+                                syncAllToCloud(guestUser.uid)
                                 attachFirestoreListeners(guestUser.uid)
                             }
                         }
@@ -75,6 +121,48 @@ class FirebaseSyncManager(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(tag, "Firebase initialization error: ${e.message}")
+        }
+    }
+
+    fun syncAllToCloud(uid: String) {
+        val db = firestore ?: return
+        scope.launch {
+            try {
+                val user = _currentUser.value
+                val profileMap = hashMapOf(
+                    "uid" to uid,
+                    "displayName" to (user?.displayName ?: "Sovereign Listener"),
+                    "email" to (user?.email ?: ""),
+                    "photoUrl" to (user?.photoUrl ?: ""),
+                    "isAnonymous" to (user?.isAnonymous ?: true),
+                    "lastActive" to System.currentTimeMillis()
+                )
+                db.collection("users").document(uid).set(profileMap, SetOptions.merge()).await()
+
+                // Upload local liked songs
+                val likes = localStore.getLikedSongs()
+                for (song in likes) {
+                    val map = songToMap(song).apply {
+                        put("likedAt", System.currentTimeMillis())
+                    }
+                    db.collection("users").document(uid)
+                        .collection("liked_songs").document(song.id)
+                        .set(map)
+                }
+
+                // Upload local history
+                val history = localStore.getRecentlyListened()
+                for (song in history) {
+                    val map = songToMap(song).apply {
+                        put("playedAt", System.currentTimeMillis())
+                    }
+                    db.collection("users").document(uid)
+                        .collection("history").document(song.id)
+                        .set(map)
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "Error syncing data to cloud: ${e.message}")
+            }
         }
     }
 
@@ -93,10 +181,14 @@ class FirebaseSyncManager(private val context: Context) {
                         Log.e(tag, "Liked songs listener error: ${error.message}")
                         return@addSnapshotListener
                     }
-                    val songs = snapshot?.documents?.mapNotNull { doc ->
+                    val remoteSongs = snapshot?.documents?.mapNotNull { doc ->
                         parseSongItem(doc.data)
                     } ?: emptyList()
-                    _likedSongs.value = songs
+
+                    if (remoteSongs.isNotEmpty()) {
+                        localStore.setLikedSongs(remoteSongs)
+                        _likedSongs.value = localStore.getLikedSongs()
+                    }
                 }
         } catch (e: Exception) {
             Log.e(tag, "Failed to attach liked songs listener", e)
@@ -116,10 +208,14 @@ class FirebaseSyncManager(private val context: Context) {
                         Log.e(tag, "History listener error: ${error.message}")
                         return@addSnapshotListener
                     }
-                    val songs = snapshot?.documents?.mapNotNull { doc ->
+                    val remoteSongs = snapshot?.documents?.mapNotNull { doc ->
                         parseSongItem(doc.data)
                     } ?: emptyList()
-                    _recentlyListened.value = songs
+
+                    if (remoteSongs.isNotEmpty()) {
+                        localStore.setHistorySongs(remoteSongs)
+                        _recentlyListened.value = localStore.getRecentlyListened()
+                    }
                 }
         } catch (e: Exception) {
             Log.e(tag, "Failed to attach history listener", e)
@@ -127,21 +223,16 @@ class FirebaseSyncManager(private val context: Context) {
     }
 
     /**
-     * Toggles a song's liked status in Firebase Cloud Firestore.
-     * Updates local state optimistically for instant UI responsiveness.
+     * Toggles a song's liked status.
+     * Persists immediately to local store, then synchronizes to Cloud Firestore if connected.
      */
     fun toggleLike(song: SongItem) {
+        val wasLiked = localStore.isLiked(song.id)
+        localStore.toggleLike(song)
+        _likedSongs.value = localStore.getLikedSongs()
+
         val uid = _currentUser.value?.uid ?: return
         val db = firestore ?: return
-
-        val isCurrentlyLiked = isLiked(song.id)
-
-        // Optimistic UI update
-        if (isCurrentlyLiked) {
-            _likedSongs.value = _likedSongs.value.filter { it.id != song.id }
-        } else {
-            _likedSongs.value = listOf(song) + _likedSongs.value
-        }
 
         scope.launch {
             try {
@@ -150,7 +241,7 @@ class FirebaseSyncManager(private val context: Context) {
                     .collection("liked_songs")
                     .document(song.id)
 
-                if (isCurrentlyLiked) {
+                if (wasLiked) {
                     docRef.delete().await()
                 } else {
                     val map = songToMap(song).apply {
@@ -165,13 +256,17 @@ class FirebaseSyncManager(private val context: Context) {
     }
 
     fun isLiked(songId: String): Boolean {
-        return _likedSongs.value.any { it.id == songId }
+        return localStore.isLiked(songId)
     }
 
     /**
-     * Records a track playback to Firestore 7-Day History.
+     * Records a track playback to 7-Day History.
+     * Persists immediately to local storage, then syncs to Cloud Firestore.
      */
     fun recordSongPlayed(song: SongItem) {
+        localStore.recordSongPlayed(song)
+        _recentlyListened.value = localStore.getRecentlyListened()
+
         val uid = _currentUser.value?.uid ?: return
         val db = firestore ?: return
 
@@ -194,9 +289,11 @@ class FirebaseSyncManager(private val context: Context) {
     }
 
     /**
-     * Saves active playback state to Firestore so the user can restore on fresh install.
+     * Saves active playback state to local storage and Firestore.
      */
     fun saveLastSession(song: SongItem, queue: List<SongItem>) {
+        localStore.saveLastSession(song, queue)
+
         val uid = _currentUser.value?.uid ?: return
         val db = firestore ?: return
 
@@ -215,15 +312,18 @@ class FirebaseSyncManager(private val context: Context) {
                     .set(sessionMap)
                     .await()
             } catch (e: Exception) {
-                Log.e(tag, "Error saving last session", e)
+                Log.e(tag, "Error saving last session to Firestore", e)
             }
         }
     }
 
     /**
-     * Restores last played song and queue from Firestore (used after reinstall or login).
+     * Restores last played song and queue (from local storage or Firestore).
      */
     suspend fun restoreLastSession(): Pair<SongItem, List<SongItem>>? {
+        val local = localStore.restoreLastSession()
+        if (local != null) return local
+
         val uid = _currentUser.value?.uid ?: return null
         val db = firestore ?: return null
 
@@ -247,9 +347,28 @@ class FirebaseSyncManager(private val context: Context) {
                 } else null
             } else null
         } catch (e: Exception) {
-            Log.e(tag, "Error restoring session", e)
+            Log.e(tag, "Error restoring session from Firestore", e)
             null
         }
+    }
+
+    /**
+     * Signs in with a Sovereign Profile (custom/test or fallback).
+     * Creates user record in Firestore and immediately syncs local likes & history.
+     */
+    fun signInWithProfile(displayName: String, email: String, photoUrl: String? = null) {
+        val uid = _currentUser.value?.uid ?: localStore.getOrCreateUserId()
+        val sovUser = SovereignUser(
+            uid = uid,
+            displayName = displayName,
+            email = email,
+            photoUrl = photoUrl,
+            isAnonymous = false
+        )
+        _currentUser.value = sovUser
+        localStore.saveUserProfile(uid, displayName, email, photoUrl, false)
+        syncAllToCloud(uid)
+        attachFirestoreListeners(uid)
     }
 
     /**
@@ -257,26 +376,42 @@ class FirebaseSyncManager(private val context: Context) {
      */
     fun signInWithGoogle(credential: AuthCredential, onComplete: (Boolean, String?) -> Unit) {
         val authInstance = auth ?: run {
-            onComplete(false, "Auth service not ready")
+            onComplete(false, "Auth service not initialized")
             return
         }
 
         val current = authInstance.currentUser
         if (current != null && current.isAnonymous) {
-            // Link existing anonymous data with the Google Account
             current.linkWithCredential(credential).addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     val user = task.result?.user
-                    _currentUser.value = user
-                    user?.let { attachFirestoreListeners(it.uid) }
+                    val sovUser = SovereignUser(
+                        uid = user?.uid ?: localStore.getOrCreateUserId(),
+                        displayName = user?.displayName ?: "Google Listener",
+                        email = user?.email,
+                        photoUrl = user?.photoUrl?.toString(),
+                        isAnonymous = false
+                    )
+                    _currentUser.value = sovUser
+                    localStore.saveUserProfile(sovUser.uid, sovUser.displayName, sovUser.email, sovUser.photoUrl, false)
+                    syncAllToCloud(sovUser.uid)
+                    attachFirestoreListeners(sovUser.uid)
                     onComplete(true, null)
                 } else {
-                    // If account already exists with this Google credential, sign into that account directly
                     authInstance.signInWithCredential(credential).addOnCompleteListener { signInTask ->
                         if (signInTask.isSuccessful) {
                             val user = signInTask.result?.user
-                            _currentUser.value = user
-                            user?.let { attachFirestoreListeners(it.uid) }
+                            val sovUser = SovereignUser(
+                                uid = user?.uid ?: localStore.getOrCreateUserId(),
+                                displayName = user?.displayName ?: "Google Listener",
+                                email = user?.email,
+                                photoUrl = user?.photoUrl?.toString(),
+                                isAnonymous = false
+                            )
+                            _currentUser.value = sovUser
+                            localStore.saveUserProfile(sovUser.uid, sovUser.displayName, sovUser.email, sovUser.photoUrl, false)
+                            syncAllToCloud(sovUser.uid)
+                            attachFirestoreListeners(sovUser.uid)
                             onComplete(true, null)
                         } else {
                             onComplete(false, signInTask.exception?.localizedMessage)
@@ -288,8 +423,17 @@ class FirebaseSyncManager(private val context: Context) {
             authInstance.signInWithCredential(credential).addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     val user = task.result?.user
-                    _currentUser.value = user
-                    user?.let { attachFirestoreListeners(it.uid) }
+                    val sovUser = SovereignUser(
+                        uid = user?.uid ?: localStore.getOrCreateUserId(),
+                        displayName = user?.displayName ?: "Google Listener",
+                        email = user?.email,
+                        photoUrl = user?.photoUrl?.toString(),
+                        isAnonymous = false
+                    )
+                    _currentUser.value = sovUser
+                    localStore.saveUserProfile(sovUser.uid, sovUser.displayName, sovUser.email, sovUser.photoUrl, false)
+                    syncAllToCloud(sovUser.uid)
+                    attachFirestoreListeners(sovUser.uid)
                     onComplete(true, null)
                 } else {
                     onComplete(false, task.exception?.localizedMessage)
@@ -299,12 +443,14 @@ class FirebaseSyncManager(private val context: Context) {
     }
 
     fun signOut() {
-        auth?.signOut()
-        _currentUser.value = null
-        _likedSongs.value = emptyList()
-        _recentlyListened.value = emptyList()
+        try {
+            auth?.signOut()
+        } catch (_: Exception) {}
         likedListener?.remove()
         historyListener?.remove()
+        localStore.clearUserProfile()
+        val guestUid = localStore.getOrCreateUserId()
+        _currentUser.value = SovereignUser(guestUid, "Sovereign Guest", null, null, true)
     }
 
     private fun songToMap(song: SongItem): HashMap<String, Any> {

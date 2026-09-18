@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -228,10 +229,13 @@ fun NowPlayingSheet(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Shuffle Button
+                // Shuffle Button with Active Glow Pill
                 IconButton(
                     onClick = { playerController.toggleShuffle() },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(if (shuffleEnabled) SovereignBlue.copy(alpha = 0.2f) else Color.Transparent)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
@@ -284,15 +288,19 @@ fun NowPlayingSheet(
                 }
 
                 // Repeat Mode Cycle Button (Off -> Repeat All -> Repeat One -> Off)
+                val isRepeatActive = repeatMode != Player.REPEAT_MODE_OFF
+
                 IconButton(
                     onClick = { playerController.cycleRepeatMode() },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(if (isRepeatActive) SovereignBlue.copy(alpha = 0.2f) else Color.Transparent)
                 ) {
                     val repeatIcon = when (repeatMode) {
                         Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne
                         else -> Icons.Default.Repeat
                     }
-                    val isRepeatActive = repeatMode != Player.REPEAT_MODE_OFF
 
                     Icon(
                         imageVector = repeatIcon,
