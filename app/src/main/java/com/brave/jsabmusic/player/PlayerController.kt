@@ -132,9 +132,11 @@ class PlayerController(private val context: Context) {
                 exoPlayer.setMediaItems(mediaItems, safeIndex, 0L)
                 exoPlayer.prepare()
                 exoPlayer.play()
-                onSongStarted?.invoke(song, playlist)
+                // onSongStarted is invoked by onMediaItemTransition — no duplicate call here
             }
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            android.util.Log.e("PlayerController", "Playback failed", e)
+        }
     }
 
     /** Plays an entire playlist from the beginning, optionally with shuffle enabled */
