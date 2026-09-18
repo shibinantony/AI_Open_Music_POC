@@ -5,9 +5,13 @@
 [![Architecture](https://img.shields.io/badge/Architecture-Pure%20Native%20%2B%20Media3%20ExoPlayer-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/guide/topics/media/media3)
 [![Audio Quality](https://img.shields.io/badge/Audio%20Fidelity-320%20kbps%20Pristine%20AAC-38BDF8?logo=audiomack&logoColor=white)](#core-technical-innovations)
 [![Cloud Sync](https://img.shields.io/badge/Cloud%20Sync-Firebase%20%2B%20Google%20Auth-FFCA28?logo=firebase&logoColor=black)](#firebase-cloud-architecture)
+[![GitHub Releases](https://img.shields.io/github/v/release/shibinantony/AI_Open_Music_POC?color=38BDF8&label=Latest%20Release&logo=github)](https://github.com/shibinantony/AI_Open_Music_POC/releases/latest)
 [![Version](https://img.shields.io/badge/Version-v2.2.0-38BDF8)](CHANGELOG.md)
 [![Binary Footprint](https://img.shields.io/badge/Binary%20Footprint-%3C%205.8%20MB%20(R8%20Full%20Mode)-brightgreen)](#)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+> ### 🚀 [Download Latest Production APK from GitHub Releases](https://github.com/shibinantony/AI_Open_Music_POC/releases/latest)
+> **Direct APK Downloads:** [**`JSABMusic-v2.2.0-release.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v2.2.0/JSABMusic-v2.2.0-release.apk) &bull; [**`JSABMusic-v2.2.0-debug.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v2.2.0/JSABMusic-v2.2.0-debug.apk) &bull; [**View All Releases & Assets &rarr;**](https://github.com/shibinantony/AI_Open_Music_POC/releases)
 
 ---
 
@@ -243,6 +247,14 @@ sequenceDiagram
     User->>App: Tap profile icon $\rightarrow$ "Sign In with Google" (Optional)
     User->>App: Tap any song / "Play All" / "Shuffle All" $\rightarrow$ 320kbps sovereign music!
 ```
+
+### 📦 Direct APK Downloads & Release Hub
+
+| Asset | Type | Target Device | Direct Download Link |
+| :--- | :--- | :--- | :--- |
+| **`JSABMusic-v2.2.0-release.apk`** | Production Signed | Android 14 / 15 / 16 (Samsung One UI 8.5) | [**Download Release APK**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v2.2.0/JSABMusic-v2.2.0-release.apk) |
+| **`JSABMusic-v2.2.0-debug.apk`** | Debug Build | Android 14 / 15 / 16 (Samsung One UI 8.5) | [**Download Debug APK**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v2.2.0/JSABMusic-v2.2.0-debug.apk) |
+| **GitHub Releases Hub** | All Versions | All Platforms | [**View Release Page**](https://github.com/shibinantony/AI_Open_Music_POC/releases) |
 
 ---
 

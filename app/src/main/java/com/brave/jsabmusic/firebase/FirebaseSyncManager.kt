@@ -236,11 +236,11 @@ class FirebaseSyncManager(private val context: Context) {
                 .await()
 
             if (doc.exists()) {
-                val lastSongMap = doc.get("lastSong") as? Map<String, Any>
+                val lastSongMap = doc.get("lastSong") as? Map<*, *>
                 val lastSong = parseSongItem(lastSongMap)
 
-                val queueList = doc.get("queue") as? List<Map<String, Any>>
-                val queue = queueList?.mapNotNull { parseSongItem(it) } ?: emptyList()
+                val queueList = doc.get("queue") as? List<*>
+                val queue = queueList?.mapNotNull { item -> (item as? Map<*, *>)?.let { parseSongItem(it) } } ?: emptyList()
 
                 if (lastSong != null && queue.isNotEmpty()) {
                     Pair(lastSong, queue)
@@ -321,7 +321,7 @@ class FirebaseSyncManager(private val context: Context) {
         )
     }
 
-    private fun parseSongItem(data: Map<String, Any>?): SongItem? {
+    private fun parseSongItem(data: Map<*, *>?): SongItem? {
         if (data == null) return null
         val id = data["id"] as? String ?: return null
         val title = data["title"] as? String ?: ""
