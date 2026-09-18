@@ -38,6 +38,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +63,7 @@ import java.util.Locale
 @Composable
 fun NowPlayingSheet(
     playerController: PlayerController,
-    firebaseSyncManager: FirebaseSyncManager?,
+    firebaseSyncManager: FirebaseSyncManager,
     onOpenEqualizer: () -> Unit,
     onDismissRequest: () -> Unit
 ) {
@@ -74,7 +75,7 @@ fun NowPlayingSheet(
     val shuffleEnabled by playerController.shuffleModeEnabled.collectAsState()
     val repeatMode by playerController.repeatMode.collectAsState()
 
-    val likedSongs by firebaseSyncManager?.likedSongs?.collectAsState() ?: remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
+    val likedSongs by firebaseSyncManager.likedSongs.collectAsState()
     val isLiked = song != null && likedSongs.any { it.id == song?.id }
 
     if (song == null) return
@@ -173,7 +174,7 @@ fun NowPlayingSheet(
                 }
 
                 IconButton(
-                    onClick = { song?.let { firebaseSyncManager?.toggleLike(it) } },
+                    onClick = { song?.let { firebaseSyncManager.toggleLike(it) } },
                     modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
