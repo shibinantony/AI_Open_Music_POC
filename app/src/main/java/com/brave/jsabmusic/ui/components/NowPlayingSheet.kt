@@ -12,15 +12,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,15 +43,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.media3.common.Player
 import coil.compose.AsyncImage
+import com.brave.jsabmusic.firebase.FirebaseSyncManager
 import com.brave.jsabmusic.player.PlayerController
 import com.brave.jsabmusic.ui.theme.AmoledBlack
 import com.brave.jsabmusic.ui.theme.AmoledCard
-import com.brave.jsabmusic.ui.theme.SaavnTeal
+import com.brave.jsabmusic.ui.theme.HeartRed
+import com.brave.jsabmusic.ui.theme.SovereignBlue
 import com.brave.jsabmusic.ui.theme.TextPrimary
 import com.brave.jsabmusic.ui.theme.TextSecondary
 import java.util.Locale
@@ -54,6 +62,7 @@ import java.util.Locale
 @Composable
 fun NowPlayingSheet(
     playerController: PlayerController,
+    firebaseSyncManager: FirebaseSyncManager?,
     onOpenEqualizer: () -> Unit,
     onDismissRequest: () -> Unit
 ) {
@@ -62,6 +71,11 @@ fun NowPlayingSheet(
     val isPlaying by playerController.isPlaying.collectAsState()
     val positionMs by playerController.currentPositionMs.collectAsState()
     val durationMs by playerController.durationMs.collectAsState()
+    val shuffleEnabled by playerController.shuffleModeEnabled.collectAsState()
+    val repeatMode by playerController.repeatMode.collectAsState()
+
+    val likedSongs by firebaseSyncManager?.likedSongs?.collectAsState() ?: remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
+    val isLiked = song != null && likedSongs.any { it.id == song?.id }
 
     if (song == null) return
 
@@ -78,7 +92,7 @@ fun NowPlayingSheet(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Bar: Collapse and Equalizer
+            // Top Bar: Collapse, Sovereign Badge, and Equalizer
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -100,10 +114,10 @@ fun NowPlayingSheet(
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "320 KBPS AAC",
+                        text = "320 KBPS SOVEREIGN",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = SaavnTeal
+                        color = SovereignBlue
                     )
                 }
 
@@ -111,14 +125,14 @@ fun NowPlayingSheet(
                     Icon(
                         imageVector = Icons.Default.GraphicEq,
                         contentDescription = "Equalizer",
-                        tint = SaavnTeal
+                        tint = SovereignBlue
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Big High-Res Artwork
+            // High-Res Artwork
             AsyncImage(
                 model = song?.highResArtworkUrl,
                 contentDescription = song?.title,
@@ -129,33 +143,49 @@ fun NowPlayingSheet(
                     .clip(RoundedCornerShape(20.dp))
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Track Title & Artist
-            Text(
-                text = song?.title ?: "",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = song?.artist ?: "",
-                fontSize = 15.sp,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Track Title, Artist, and Liked Heart Icon
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = song?.title ?: "",
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = song?.artist ?: "",
+                        fontSize = 14.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                IconButton(
+                    onClick = { song?.let { firebaseSyncManager?.toggleLike(it) } },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = "Like Song",
+                        tint = if (isLiked) HeartRed else TextSecondary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Scrubber
             val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
@@ -166,15 +196,15 @@ fun NowPlayingSheet(
                     playerController.seekTo((factor * durationMs).toLong())
                 },
                 colors = SliderDefaults.colors(
-                    thumbColor = SaavnTeal,
-                    activeTrackColor = SaavnTeal,
+                    thumbColor = SovereignBlue,
+                    activeTrackColor = SovereignBlue,
                     inactiveTrackColor = AmoledCard
                 ),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(0.92f)
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(0.92f),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
@@ -189,50 +219,85 @@ fun NowPlayingSheet(
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Playback Controls
+            // Playback Controls with Shuffle and Repeat Modes
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(0.95f),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Shuffle Button
+                IconButton(
+                    onClick = { playerController.toggleShuffle() },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = "Shuffle",
+                        tint = if (shuffleEnabled) SovereignBlue else TextSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                // Skip Previous
                 IconButton(
                     onClick = { playerController.skipPrevious() },
-                    modifier = Modifier.size(54.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipPrevious,
                         contentDescription = "Previous",
                         tint = TextPrimary,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp)
                     )
                 }
 
+                // Play / Pause Primary Pill
                 IconButton(
                     onClick = { playerController.togglePlay() },
                     modifier = Modifier
-                        .size(68.dp)
+                        .size(64.dp)
                         .clip(CircleShape)
-                        .background(SaavnTeal)
+                        .background(SovereignBlue)
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = AmoledBlack,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(38.dp)
                     )
                 }
 
+                // Skip Next
                 IconButton(
                     onClick = { playerController.skipNext() },
-                    modifier = Modifier.size(54.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Next",
                         tint = TextPrimary,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+
+                // Repeat Mode Cycle Button (Off -> Repeat All -> Repeat One -> Off)
+                IconButton(
+                    onClick = { playerController.cycleRepeatMode() },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    val repeatIcon = when (repeatMode) {
+                        Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne
+                        else -> Icons.Default.Repeat
+                    }
+                    val isRepeatActive = repeatMode != Player.REPEAT_MODE_OFF
+
+                    Icon(
+                        imageVector = repeatIcon,
+                        contentDescription = "Repeat Mode",
+                        tint = if (isRepeatActive) SovereignBlue else TextSecondary,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }

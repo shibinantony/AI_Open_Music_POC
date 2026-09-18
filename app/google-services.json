@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "1085293847291",
+    "project_id": "jsab-music-poc",
+    "storage_bucket": "jsab-music-poc.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1085293847291:android:72d8a5e89bf16c39a01f4c",
+        "android_client_info": {
+          "package_name": "com.brave.jsabmusic"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1085293847291-7f9a8b8c2d1e0f4a5b6c7d8e9f0a1b2c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.brave.jsabmusic",
+            "certificate_hash": "2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b"
+          }
+        },
+        {
+          "client_id": "1085293847291-webclientidforgooglesignin012345.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3_ExampleFirebaseKeyForJSABMusic2026"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

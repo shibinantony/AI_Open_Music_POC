@@ -10,9 +10,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,19 +37,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -57,6 +69,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -71,7 +84,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,11 +94,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import com.brave.jsabmusic.R
 import com.brave.jsabmusic.api.JioSaavnApiClient
 import com.brave.jsabmusic.api.model.AlbumItem
 import com.brave.jsabmusic.api.model.ArtistItem
 import com.brave.jsabmusic.api.model.PlaylistItem
 import com.brave.jsabmusic.api.model.SongItem
+import com.brave.jsabmusic.firebase.FirebaseSyncManager
 import com.brave.jsabmusic.player.PlayerController
 import com.brave.jsabmusic.service.PlaybackService
 import com.brave.jsabmusic.timer.SleepTimerManager
@@ -92,23 +109,29 @@ import com.brave.jsabmusic.ui.components.NowPlayingSheet
 import com.brave.jsabmusic.ui.components.SleepTimerSheet
 import com.brave.jsabmusic.ui.theme.AmoledBlack
 import com.brave.jsabmusic.ui.theme.AmoledCard
+import com.brave.jsabmusic.ui.theme.HeartRed
 import com.brave.jsabmusic.ui.theme.JSABMusicTheme
-import com.brave.jsabmusic.ui.theme.SaavnTeal
-import com.brave.jsabmusic.ui.theme.SaavnTealAccent
+import com.brave.jsabmusic.ui.theme.SovereignBlue
+import com.brave.jsabmusic.ui.theme.SovereignBlueAccent
 import com.brave.jsabmusic.ui.theme.TextPrimary
 import com.brave.jsabmusic.ui.theme.TextSecondary
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
 
 /**
  * Pure Native AndroidX Media3 Audio Player for JioSaavn.
- * 100% Ad-Free, 320 kbps Uncompressed CDN Audio, Hardware Audio DSP, Zero WebViews.
+ * 100% Ad-Free, 320 kbps Uncompressed CDN Audio, Hardware Audio DSP.
  *
- * v2.1.0: Bifurcated search — Songs / Albums / Artists / Playlists tabs with
- *         parallel JioSaavn API queries and one-tap drill-down playback.
+ * v2.2.0: Sovereign Blue & Doll Mascot branding, Play All / Shuffle All / Repeat modes,
+ *         Firebase Cloud Persistence (Google Sign-In, Liked Music, 7-Day History, and Session Restoration).
  */
 class MainActivity : ComponentActivity() {
 
     private lateinit var playerController: PlayerController
+    private lateinit var firebaseSyncManager: FirebaseSyncManager
     private val sleepTimerManager = SleepTimerManager()
     private var isServiceBound = false
 
@@ -129,11 +152,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         try {
+            firebaseSyncManager = FirebaseSyncManager(applicationContext)
+
             playerController = PlaybackService.playerControllerInstance
                 ?: PlayerController(applicationContext).also {
                     PlaybackService.playerControllerInstance = it
                 }
             sleepTimerManager.setPlayerController(playerController)
+
+            // Connect track playback events to Firebase for 7-day history & cloud session backup
+            playerController.onSongStarted = { song, queue ->
+                firebaseSyncManager.recordSongPlayed(song)
+                firebaseSyncManager.saveLastSession(song, queue)
+            }
+
             checkNotificationPermission()
             bindPlaybackService()
         } catch (_: Exception) {}
@@ -142,7 +174,8 @@ class MainActivity : ComponentActivity() {
             JSABMusicTheme {
                 MainPlayerScreen(
                     playerController = playerController,
-                    sleepTimerManager = sleepTimerManager
+                    sleepTimerManager = sleepTimerManager,
+                    firebaseSyncManager = firebaseSyncManager
                 )
             }
         }
@@ -176,10 +209,15 @@ class MainActivity : ComponentActivity() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Search tab labels
+// Navigation & Tab definitions
 // ─────────────────────────────────────────────────────────────────────────────
 
 private val SEARCH_TABS = listOf("Songs", "Albums", "Artists", "Playlists")
+private enum class MainNavSection(val label: String) {
+    EXPLORE("Explore"),
+    LIKED_MUSIC("Liked Music"),
+    RECENT("Recent (7d)")
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Screen
@@ -188,15 +226,19 @@ private val SEARCH_TABS = listOf("Songs", "Albums", "Artists", "Playlists")
 @Composable
 fun MainPlayerScreen(
     playerController: PlayerController,
-    sleepTimerManager: SleepTimerManager
+    sleepTimerManager: SleepTimerManager,
+    firebaseSyncManager: FirebaseSyncManager
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
 
-    // ── State ────────────────────────────────────────────────────────────────
+    // ── Navigation State ─────────────────────────────────────────────────────
+    var currentSection  by remember { mutableStateOf(MainNavSection.EXPLORE) }
     var searchQuery     by remember { mutableStateOf("") }
     var selectedTab     by remember { mutableIntStateOf(0) }
 
+    // ── Data States ──────────────────────────────────────────────────────────
     var songResults     by remember { mutableStateOf<List<SongItem>>(emptyList()) }
     var albumResults    by remember { mutableStateOf<List<AlbumItem>>(emptyList()) }
     var artistResults   by remember { mutableStateOf<List<ArtistItem>>(emptyList()) }
@@ -204,23 +246,66 @@ fun MainPlayerScreen(
     var trendingSongs   by remember { mutableStateOf(JioSaavnApiClient.getCuratedDefaultSongs()) }
     var isLoading       by remember { mutableStateOf(false) }
 
+    // ── Sheets State ─────────────────────────────────────────────────────────
     var showEqualizer   by remember { mutableStateOf(false) }
     var showSleepTimer  by remember { mutableStateOf(false) }
     var showNowPlaying  by remember { mutableStateOf(false) }
+    var showUserProfile by remember { mutableStateOf(false) }
 
+    // ── Reactive Flows ───────────────────────────────────────────────────────
     val currentSong     by playerController.currentSong.collectAsState()
     val isPlaying       by playerController.isPlaying.collectAsState()
     val isTimerRunning  by sleepTimerManager.isTimerRunning.collectAsState()
+    val currentUser     by firebaseSyncManager.currentUser.collectAsState()
+    val likedSongs      by firebaseSyncManager.likedSongs.collectAsState()
+    val recentlyListened by firebaseSyncManager.recentlyListened.collectAsState()
 
-    // ── Startup: load trending ─────────────────────────────────────────────
+    // ── Google Sign In Activity Result Launcher ──────────────────────────────
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        try {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken
+            if (idToken != null) {
+                val credential = GoogleAuthProvider.getCredential(idToken, null)
+                firebaseSyncManager.signInWithGoogle(credential) { success, _ ->
+                    if (success) {
+                        // After signing in, auto-restore last session if not currently playing
+                        scope.launch {
+                            val restored = firebaseSyncManager.restoreLastSession()
+                            if (restored != null && playerController.currentSong.value == null) {
+                                playerController.playSong(restored.first, restored.second)
+                                playerController.exoPlayer.pause()
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    // ── Startup: load trending & restore cloud session on reinstall ──────────
     LaunchedEffect(Unit) {
         try {
             val fresh = JioSaavnApiClient.getTrendingSongs()
             if (fresh.isNotEmpty()) trendingSongs = fresh
         } catch (_: Exception) {}
+
+        // Restore cloud session if app was reinstalled or fresh launched
+        try {
+            if (playerController.currentSong.value == null) {
+                val restored = firebaseSyncManager.restoreLastSession()
+                if (restored != null) {
+                    playerController.playSong(restored.first, restored.second)
+                    playerController.exoPlayer.pause()
+                }
+            }
+        } catch (_: Exception) {}
     }
 
-    // ── Search trigger ────────────────────────────────────────────────────
+    // ── Search trigger ───────────────────────────────────────────────────────
     fun triggerSearch(query: String) {
         if (query.length < 2) {
             songResults = emptyList(); albumResults = emptyList()
@@ -240,7 +325,7 @@ fun MainPlayerScreen(
         }
     }
 
-    // ── Layout ────────────────────────────────────────────────────────────
+    // ── Layout ───────────────────────────────────────────────────────────────
     Scaffold(
         containerColor = AmoledBlack,
         modifier = Modifier
@@ -259,22 +344,25 @@ fun MainPlayerScreen(
                     .padding(horizontal = 16.dp)
             ) {
 
-                // ── Header ─────────────────────────────────────────────────
+                // ── Header Bar with Peaceful Doll Mascot ─────────────────────
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp, bottom = 12.dp),
+                        .padding(top = 10.dp, bottom = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Custom Peaceful Doll Mascot Icon
                         Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = "Logo",
-                            tint = SaavnTeal,
-                            modifier = Modifier.size(28.dp)
+                            painter = painterResource(id = R.drawable.ic_serene_doll_music),
+                            contentDescription = "JSAB Mascot",
+                            tint = Color.Unspecified,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = "JSAB Music",
@@ -283,185 +371,305 @@ fun MainPlayerScreen(
                                 color = TextPrimary
                             )
                             Text(
-                                text = "Pure 320 Kbps Direct CDN",
+                                text = "Enjoy the beauty of sovereign music",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = SaavnTealAccent
+                                color = SovereignBlueAccent
                             )
                         }
                     }
 
+                    // Action Controls Pill + User Profile
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = AmoledCard,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF222222))
+                        border = BorderStroke(1.dp, Color(0xFF1E293B))
                     ) {
-                        Row(modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             IconButton(
                                 onClick = { showEqualizer = true },
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(34.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.GraphicEq,
                                     contentDescription = "Equalizer",
-                                    tint = SaavnTeal,
-                                    modifier = Modifier.size(18.dp)
+                                    tint = SovereignBlue,
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                             IconButton(
                                 onClick = { showSleepTimer = true },
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(34.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Bedtime,
                                     contentDescription = "Sleep Timer",
-                                    tint = if (isTimerRunning) SaavnTeal else TextSecondary,
-                                    modifier = Modifier.size(18.dp)
+                                    tint = if (isTimerRunning) SovereignBlue else TextSecondary,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { showUserProfile = true },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                if (currentUser?.photoUrl != null) {
+                                    AsyncImage(
+                                        model = currentUser?.photoUrl,
+                                        contentDescription = "Profile",
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.AccountCircle,
+                                        contentDescription = "User Account",
+                                        tint = if (currentUser?.isAnonymous == false) SovereignBlue else TextSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Main Section Switcher (Explore | Liked Music | Recent) ────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MainNavSection.values().forEach { section ->
+                        val isSelected = currentSection == section
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) SovereignBlue else AmoledCard,
+                            border = BorderStroke(1.dp, if (isSelected) SovereignBlue else Color(0xFF1E293B)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .clickable {
+                                    currentSection = section
+                                    if (section != MainNavSection.EXPLORE) {
+                                        focusManager.clearFocus()
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = when (section) {
+                                        MainNavSection.EXPLORE -> Icons.Default.Explore
+                                        MainNavSection.LIKED_MUSIC -> Icons.Default.Favorite
+                                        MainNavSection.RECENT -> Icons.Default.History
+                                    },
+                                    contentDescription = null,
+                                    tint = if (isSelected) AmoledBlack else if (section == MainNavSection.LIKED_MUSIC) HeartRed else TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = section.label,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) AmoledBlack else TextPrimary,
+                                    maxLines = 1
                                 )
                             }
                         }
                     }
                 }
 
-                // ── Search Bar ─────────────────────────────────────────────
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { query ->
-                        searchQuery = query
-                        triggerSearch(query)
-                    },
-                    placeholder = {
-                        Text("Search songs, artists, albums, playlists...", color = TextSecondary)
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = TextSecondary
-                        )
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = {
-                                searchQuery = ""
-                                songResults = emptyList(); albumResults = emptyList()
-                                artistResults = emptyList(); playlistResults = emptyList()
-                                selectedTab = 0
-                            }) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // ── Section Content ──────────────────────────────────────────
+                when (currentSection) {
+                    MainNavSection.EXPLORE -> {
+                        // Search Bar
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { query ->
+                                searchQuery = query
+                                triggerSearch(query)
+                            },
+                            placeholder = {
+                                Text("Search songs, artists, albums, playlists...", color = TextSecondary, fontSize = 13.sp)
+                            },
+                            leadingIcon = {
                                 Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear",
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
                                     tint = TextSecondary
                                 )
-                            }
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = {
+                                        searchQuery = ""
+                                        songResults = emptyList(); albumResults = emptyList()
+                                        artistResults = emptyList(); playlistResults = emptyList()
+                                        selectedTab = 0
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "Clear",
+                                            tint = TextSecondary
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor   = AmoledCard,
+                                unfocusedContainerColor = AmoledCard,
+                                focusedBorderColor      = SovereignBlue,
+                                unfocusedBorderColor    = Color(0xFF1E293B),
+                                focusedTextColor        = TextPrimary,
+                                unfocusedTextColor      = TextPrimary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Tab bar or Action Bar
+                        if (searchQuery.length >= 2) {
+                            SearchTabBar(
+                                selectedTab = selectedTab,
+                                tabs = SEARCH_TABS,
+                                onTabSelected = { selectedTab = it }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        } else {
+                            PlayAllHeaderRow(
+                                title = "Trending Today (320 Kbps)",
+                                onPlayAll = { playerController.playAll(trendingSongs, shuffle = false) },
+                                onShuffleAll = { playerController.playAll(trendingSongs, shuffle = true) },
+                                isEnabled = trendingSongs.isNotEmpty()
+                            )
                         }
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor   = AmoledCard,
-                        unfocusedContainerColor = AmoledCard,
-                        focusedBorderColor      = SaavnTeal,
-                        unfocusedBorderColor    = Color(0xFF222222),
-                        focusedTextColor        = TextPrimary,
-                        unfocusedTextColor      = TextPrimary
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // ── Tab bar (search mode only) ──────────────────────────────
-                if (searchQuery.length >= 2) {
-                    SearchTabBar(
-                        selectedTab = selectedTab,
-                        tabs = SEARCH_TABS,
-                        onTabSelected = { selectedTab = it }
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                } else {
-                    Text(
-                        text = "Trending Today (320 Kbps)",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-
-                // ── Content ────────────────────────────────────────────────
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = SaavnTeal)
+                        // Content List
+                        if (isLoading) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = SovereignBlue)
+                            }
+                        } else if (searchQuery.length >= 2) {
+                            when (selectedTab) {
+                                0 -> SongList(
+                                    songs = songResults,
+                                    currentSong = currentSong,
+                                    isPlaying = isPlaying,
+                                    firebaseSyncManager = firebaseSyncManager,
+                                    modifier = Modifier.weight(1f),
+                                    onSongClick = { song -> playerController.playSong(song, songResults) }
+                                )
+                                1 -> AlbumList(
+                                    albums = albumResults,
+                                    modifier = Modifier.weight(1f),
+                                    onAlbumClick = { album ->
+                                        scope.launch {
+                                            isLoading = true
+                                            val songs = JioSaavnApiClient.getAlbumSongs(album.id)
+                                            isLoading = false
+                                            if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
+                                        }
+                                    }
+                                )
+                                2 -> ArtistList(
+                                    artists = artistResults,
+                                    modifier = Modifier.weight(1f),
+                                    onArtistClick = { artist ->
+                                        scope.launch {
+                                            isLoading = true
+                                            val songs = JioSaavnApiClient.getArtistSongs(artist.id)
+                                            isLoading = false
+                                            if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
+                                        }
+                                    }
+                                )
+                                3 -> PlaylistList(
+                                    playlists = playlistResults,
+                                    modifier = Modifier.weight(1f),
+                                    onPlaylistClick = { playlist ->
+                                        scope.launch {
+                                            isLoading = true
+                                            val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id)
+                                            isLoading = false
+                                            if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
+                                        }
+                                    }
+                                )
+                            }
+                        } else {
+                            SongList(
+                                songs = trendingSongs,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                firebaseSyncManager = firebaseSyncManager,
+                                modifier = Modifier.weight(1f),
+                                onSongClick = { song -> playerController.playSong(song, trendingSongs) }
+                            )
+                        }
                     }
-                } else if (searchQuery.length >= 2) {
-                    // Tabbed search results — weight(1f) applied here in ColumnScope
-                    when (selectedTab) {
-                        0 -> SongList(
-                            songs = songResults,
+
+                    MainNavSection.LIKED_MUSIC -> {
+                        PlayAllHeaderRow(
+                            title = "Liked Music (${likedSongs.size})",
+                            onPlayAll = { playerController.playAll(likedSongs, shuffle = false) },
+                            onShuffleAll = { playerController.playAll(likedSongs, shuffle = true) },
+                            isEnabled = likedSongs.isNotEmpty()
+                        )
+                        SongList(
+                            songs = likedSongs,
                             currentSong = currentSong,
                             isPlaying = isPlaying,
+                            firebaseSyncManager = firebaseSyncManager,
+                            emptyMessage = "No liked songs yet. Tap the heart on any song to add it here!",
                             modifier = Modifier.weight(1f),
-                            onSongClick = { song -> playerController.playSong(song, songResults) }
-                        )
-                        1 -> AlbumList(
-                            albums = albumResults,
-                            modifier = Modifier.weight(1f),
-                            onAlbumClick = { album ->
-                                scope.launch {
-                                    isLoading = true
-                                    val songs = JioSaavnApiClient.getAlbumSongs(album.id)
-                                    isLoading = false
-                                    if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                }
-                            }
-                        )
-                        2 -> ArtistList(
-                            artists = artistResults,
-                            modifier = Modifier.weight(1f),
-                            onArtistClick = { artist ->
-                                scope.launch {
-                                    isLoading = true
-                                    val songs = JioSaavnApiClient.getArtistSongs(artist.id)
-                                    isLoading = false
-                                    if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                }
-                            }
-                        )
-                        3 -> PlaylistList(
-                            playlists = playlistResults,
-                            modifier = Modifier.weight(1f),
-                            onPlaylistClick = { playlist ->
-                                scope.launch {
-                                    isLoading = true
-                                    val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id)
-                                    isLoading = false
-                                    if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                }
-                            }
+                            onSongClick = { song -> playerController.playSong(song, likedSongs) }
                         )
                     }
-                } else {
-                    // Trending
-                    SongList(
-                        songs = trendingSongs,
-                        currentSong = currentSong,
-                        isPlaying = isPlaying,
-                        modifier = Modifier.weight(1f),
-                        onSongClick = { song -> playerController.playSong(song, trendingSongs) }
-                    )
+
+                    MainNavSection.RECENT -> {
+                        PlayAllHeaderRow(
+                            title = "Recently Listened (${recentlyListened.size})",
+                            onPlayAll = { playerController.playAll(recentlyListened, shuffle = false) },
+                            onShuffleAll = { playerController.playAll(recentlyListened, shuffle = true) },
+                            isEnabled = recentlyListened.isNotEmpty()
+                        )
+                        SongList(
+                            songs = recentlyListened,
+                            currentSong = currentSong,
+                            isPlaying = isPlaying,
+                            firebaseSyncManager = firebaseSyncManager,
+                            emptyMessage = "No songs listened in the last 7 days. Play music to track history!",
+                            modifier = Modifier.weight(1f),
+                            onSongClick = { song -> playerController.playSong(song, recentlyListened) }
+                        )
+                    }
                 }
             }
 
-            // ── Bottom Mini-Player ──────────────────────────────────────────
+            // ── Persistent Mini-Player Bar ────────────────────────────────────
             if (currentSong != null) {
+                val isSongLiked = likedSongs.any { it.id == currentSong?.id }
+
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -470,13 +678,13 @@ fun MainPlayerScreen(
                         .clip(RoundedCornerShape(16.dp))
                         .clickable { showNowPlaying = true },
                     color = AmoledCard,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF222222)),
+                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
                     tonalElevation = 8.dp
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AsyncImage(
@@ -487,7 +695,7 @@ fun MainPlayerScreen(
                                 .size(48.dp)
                                 .clip(RoundedCornerShape(8.dp))
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = currentSong?.title ?: "",
@@ -505,20 +713,41 @@ fun MainPlayerScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        IconButton(onClick = { playerController.togglePlay() }) {
+
+                        // Mini-Player Like Button
+                        IconButton(
+                            onClick = { currentSong?.let { firebaseSyncManager.toggleLike(it) } },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isSongLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = "Like Song",
+                                tint = if (isSongLiked) HeartRed else TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { playerController.togglePlay() },
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play/Pause",
-                                tint = SaavnTeal,
-                                modifier = Modifier.size(30.dp)
+                                tint = SovereignBlue,
+                                modifier = Modifier.size(28.dp)
                             )
                         }
-                        IconButton(onClick = { playerController.skipNext() }) {
+
+                        IconButton(
+                            onClick = { playerController.skipNext() },
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "Next",
                                 tint = TextPrimary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
@@ -527,10 +756,11 @@ fun MainPlayerScreen(
         }
     }
 
-    // ── Modal Sheets ─────────────────────────────────────────────────────────
+    // ── Modal Sheets ──────────────────────────────────────────────────────────
     if (showNowPlaying) {
         NowPlayingSheet(
             playerController = playerController,
+            firebaseSyncManager = firebaseSyncManager,
             onOpenEqualizer = { showNowPlaying = false; showEqualizer = true },
             onDismissRequest = { showNowPlaying = false }
         )
@@ -547,6 +777,269 @@ fun MainPlayerScreen(
             onDismissRequest = { showSleepTimer = false }
         )
     }
+    if (showUserProfile) {
+        UserProfileSheet(
+            firebaseSyncManager = firebaseSyncManager,
+            onSignInClick = {
+                try {
+                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestIdToken("1085293847291-webclientidforgooglesignin012345.apps.googleusercontent.com")
+                        .requestEmail()
+                        .build()
+                    val signInClient = GoogleSignIn.getClient(context, gso)
+                    googleSignInLauncher.launch(signInClient.signInIntent)
+                } catch (_: Exception) {}
+            },
+            onDismissRequest = { showUserProfile = false }
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Play All & Shuffle All Header Row
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun PlayAllHeaderRow(
+    title: String,
+    onPlayAll: () -> Unit,
+    onShuffleAll: () -> Unit,
+    isEnabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Play All Pill
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isEnabled) SovereignBlue else AmoledCard,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = isEnabled, onClick = onPlayAll)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = if (isEnabled) AmoledBlack else TextSecondary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "Play All",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isEnabled) AmoledBlack else TextSecondary
+                    )
+                }
+            }
+
+            // Shuffle All Pill
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = AmoledCard,
+                border = BorderStroke(1.dp, if (isEnabled) SovereignBlue else Color(0xFF1E293B)),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = isEnabled, onClick = onShuffleAll)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = null,
+                        tint = if (isEnabled) SovereignBlue else TextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "Shuffle",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isEnabled) SovereignBlue else TextSecondary
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Profile & Google Account Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UserProfileSheet(
+    firebaseSyncManager: FirebaseSyncManager,
+    onSignInClick: () -> Unit,
+    onDismissRequest: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val user by firebaseSyncManager.currentUser.collectAsState()
+    val likedSongs by firebaseSyncManager.likedSongs.collectAsState()
+    val recentSongs by firebaseSyncManager.recentlyListened.collectAsState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        containerColor = AmoledCard,
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Avatar
+            if (user?.photoUrl != null) {
+                AsyncImage(
+                    model = user?.photoUrl,
+                    contentDescription = "User Avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1E293B)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_serene_doll_music),
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(52.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // User Name & Email
+            val displayName = user?.displayName?.ifEmpty { null }
+                ?: if (user?.isAnonymous == true) "Sovereign Guest" else "Sovereign Listener"
+            Text(
+                text = displayName,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            if (!user?.email.isNullOrEmpty()) {
+                Text(
+                    text = user?.email ?: "",
+                    fontSize = 13.sp,
+                    color = TextSecondary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Cloud Sync Status Pill
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = AmoledBlack,
+                border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(SovereignBlue)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (user?.isAnonymous == false) "Synced with Google Cloud" else "Local Guest (Auto-Sync Active)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = SovereignBlue
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Stats Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "${likedSongs.size}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text(text = "Liked Songs", fontSize = 12.sp, color = TextSecondary)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "${recentSongs.size}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text(text = "7d History", fontSize = 12.sp, color = TextSecondary)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Action: Google Sign In or Sign Out
+            if (user == null || user?.isAnonymous == true) {
+                Button(
+                    onClick = {
+                        onSignInClick()
+                        onDismissRequest()
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SovereignBlue),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Sign In with Google",
+                        color = AmoledBlack,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                OutlinedButton(
+                    onClick = {
+                        firebaseSyncManager.signOut()
+                        onDismissRequest()
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Sign Out",
+                        color = HeartRed,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -562,12 +1055,12 @@ private fun SearchTabBar(
     ScrollableTabRow(
         selectedTabIndex = selectedTab,
         containerColor = AmoledBlack,
-        contentColor = SaavnTeal,
+        contentColor = SovereignBlue,
         edgePadding = 0.dp,
         indicator = { tabPositions ->
             TabRowDefaults.SecondaryIndicator(
                 modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                color = SaavnTeal
+                color = SovereignBlue
             )
         }
     ) {
@@ -580,7 +1073,7 @@ private fun SearchTabBar(
                         text = label,
                         fontSize = 13.sp,
                         fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selectedTab == index) SaavnTeal else TextSecondary
+                        color = if (selectedTab == index) SovereignBlue else TextSecondary
                     )
                 }
             )
@@ -589,7 +1082,7 @@ private fun SearchTabBar(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Song list  — modifier comes in from ColumnScope caller (carries weight(1f))
+// Song list
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -597,11 +1090,13 @@ private fun SongList(
     songs: List<SongItem>,
     currentSong: SongItem?,
     isPlaying: Boolean,
+    firebaseSyncManager: FirebaseSyncManager,
+    emptyMessage: String = "No songs found",
     modifier: Modifier = Modifier,
     onSongClick: (SongItem) -> Unit
 ) {
     if (songs.isEmpty()) {
-        EmptyState("No songs found", modifier)
+        EmptyState(emptyMessage, modifier)
         return
     }
     LazyColumn(
@@ -612,6 +1107,8 @@ private fun SongList(
             SongRowItem(
                 song = song,
                 isCurrentlyPlaying = currentSong?.id == song.id && isPlaying,
+                isLiked = firebaseSyncManager.isLiked(song.id),
+                onLikeToggle = { firebaseSyncManager.toggleLike(song) },
                 onClick = { onSongClick(song) }
             )
         }
@@ -702,7 +1199,7 @@ private fun AlbumCard(album: AlbumItem, onClick: () -> Unit) {
                         text = "${album.songCount} tracks",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = SaavnTeal
+                        color = SovereignBlue
                     )
                 }
             }
@@ -770,7 +1267,7 @@ private fun ArtistCard(artist: ArtistItem, onClick: () -> Unit) {
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = null,
-                        tint = SaavnTeal,
+                        tint = SovereignBlue,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -804,7 +1301,7 @@ private fun ArtistCard(artist: ArtistItem, onClick: () -> Unit) {
                     text = "Top Songs",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = SaavnTeal
+                    color = SovereignBlue
                 )
             }
         }
@@ -871,7 +1368,7 @@ private fun PlaylistCard(playlist: PlaylistItem, onClick: () -> Unit) {
                     Icon(
                         imageVector = Icons.Default.PlaylistPlay,
                         contentDescription = null,
-                        tint = SaavnTeal,
+                        tint = SovereignBlue,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -910,7 +1407,7 @@ private fun PlaylistCard(playlist: PlaylistItem, onClick: () -> Unit) {
                     text = "Play All",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = SaavnTeal
+                    color = SovereignBlue
                 )
             }
         }
@@ -918,13 +1415,15 @@ private fun PlaylistCard(playlist: PlaylistItem, onClick: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared: SongRowItem  (public — used by trending + song search)
+// Shared: SongRowItem with Like Button
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun SongRowItem(
     song: SongItem,
     isCurrentlyPlaying: Boolean,
+    isLiked: Boolean = false,
+    onLikeToggle: () -> Unit = {},
     onClick: () -> Unit
 ) {
     Surface(
@@ -932,12 +1431,12 @@ fun SongRowItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
-        color = if (isCurrentlyPlaying) Color(0xFF161618) else AmoledBlack
+        color = if (isCurrentlyPlaying) Color(0xFF0F172A) else AmoledBlack
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp, horizontal = 4.dp),
+                .padding(vertical = 7.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
@@ -945,16 +1444,16 @@ fun SongRowItem(
                 contentDescription = song.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(50.dp)
                     .clip(RoundedCornerShape(8.dp))
             )
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = song.title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isCurrentlyPlaying) SaavnTeal else TextPrimary,
+                    color = if (isCurrentlyPlaying) SovereignBlue else TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -966,6 +1465,20 @@ fun SongRowItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+
+            // Quick Heart / Like Action
+            IconButton(
+                onClick = onLikeToggle,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = "Like",
+                    tint = if (isLiked) HeartRed else TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
@@ -976,7 +1489,7 @@ fun SongRowItem(
                     text = "320K",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = SaavnTeal
+                    color = SovereignBlue
                 )
             }
         }

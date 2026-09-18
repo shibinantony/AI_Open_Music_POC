@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Serene Celestial Background Glow Aura -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M24,2A22,22 0 1,0 46,24,22,22 0 0,0 24,2Z" />
+
+    <!-- Outer Headphone Arch -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M11,24 C11,14 16,8 24,8 C32,8 37,14 37,24" />
+
+    <!-- Cute Peaceful Doll Face Base -->
+    <path
+        android:fillColor="#E0F2FE"
+        android:pathData="M24,13 C17.5,13 13,17.5 13,24 C13,31 17.5,35 24,35 C30.5,35 35,31 35,24 C35,17.5 30.5,13 24,13 Z" />
+
+    <!-- Doll Hair Bangs -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M13.5,21 C15,16 19,13 24,13 C29,13 33,16 34.5,21 C31,18 27,17 24,17 C21,17 17,18 13.5,21 Z" />
+
+    <!-- Serene Peaceful Closed Eyes (Happy/Calm curved arcs) -->
+    <path
+        android:strokeColor="#0284C7"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M18,24 C19,26 21,26 22,24" />
+    <path
+        android:strokeColor="#0284C7"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M26,24 C27,26 29,26 30,24" />
+
+    <!-- Rosy Peaceful Cheeks -->
+    <path
+        android:fillColor="#F472B6"
+        android:fillAlpha="0.6"
+        android:pathData="M16.5,27 A1.5,1.5 0 1,0 19.5,27 A1.5,1.5 0 1,0 16.5,27 Z" />
+    <path
+        android:fillColor="#F472B6"
+        android:fillAlpha="0.6"
+        android:pathData="M28.5,27 A1.5,1.5 0 1,0 31.5,27 A1.5,1.5 0 1,0 28.5,27 Z" />
+
+    <!-- Gentle Doll Smile -->
+    <path
+        android:strokeColor="#0284C7"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M22.5,28.5 Q24,30.5 25.5,28.5" />
+
+    <!-- Headphone Earcups (Left & Right) with Blue Accents -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M9,20 A3,6 0 0,0 9,30 L11.5,30 A1,1 0 0,0 12.5,29 L12.5,21 A1,1 0 0,0 11.5,20 Z" />
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M9.5,22 A1.5,3.5 0 0,0 9.5,28 L10.5,28 L10.5,22 Z" />
+
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M39,20 A3,6 0 0,1 39,30 L36.5,30 A1,1 0 0,1 35.5,29 L35.5,21 A1,1 0 0,1 36.5,20 Z" />
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M38.5,22 A1.5,3.5 0 0,1 38.5,28 L37.5,28 L37.5,22 Z" />
+
+    <!-- Floating Serene Music Note / Star Sparkle -->
+    <path
+        android:fillColor="#60A5FA"
+        android:pathData="M36,6 L36,11 A2,2 0 1,1 34,9 L34,7 L39,5 L39,8 Z" />
+</vector>

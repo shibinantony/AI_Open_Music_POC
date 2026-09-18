@@ -20,7 +20,8 @@ import kotlinx.coroutines.launch
 
 /**
  * High-performance centralized audio playback controller powered by AndroidX Media3 / ExoPlayer.
- * Orchestrates 320 kbps CDN playback, gapless playlist transitions, and hardware DSP effects.
+ * Orchestrates 320 kbps CDN playback, gapless playlist transitions, hardware DSP effects,
+ * shuffle, and repeat modes.
  */
 class PlayerController(private val context: Context) {
 
@@ -45,6 +46,15 @@ class PlayerController(private val context: Context) {
     private val _queue = MutableStateFlow<List<SongItem>>(emptyList())
     val queue: StateFlow<List<SongItem>> = _queue.asStateFlow()
 
+    private val _shuffleModeEnabled = MutableStateFlow(false)
+    val shuffleModeEnabled: StateFlow<Boolean> = _shuffleModeEnabled.asStateFlow()
+
+    private val _repeatMode = MutableStateFlow(Player.REPEAT_MODE_OFF)
+    val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
+
+    /** Callback invoked whenever a song begins playing to sync with Firebase History & Cloud Session */
+    var onSongStarted: ((SongItem, List<SongItem>) -> Unit)? = null
+
     private var currentIndex = 0
 
     init {
@@ -59,6 +69,14 @@ class PlayerController(private val context: Context) {
                 }
             }
 
+            override fun onShuffleModeEnabledChanged(shuffleEnabled: Boolean) {
+                _shuffleModeEnabled.value = shuffleEnabled
+            }
+
+            override fun onRepeatModeChanged(repeatModeVal: Int) {
+                _repeatMode.value = repeatModeVal
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val mediaId = mediaItem?.mediaId
                 if (mediaId != null) {
@@ -66,6 +84,7 @@ class PlayerController(private val context: Context) {
                     if (song != null) {
                         _currentSong.value = song
                         currentIndex = _queue.value.indexOf(song)
+                        onSongStarted?.invoke(song, _queue.value)
                     }
                 }
                 equalizerManager.attachToAudioSession(exoPlayer.audioSessionId)
@@ -113,8 +132,34 @@ class PlayerController(private val context: Context) {
                 exoPlayer.setMediaItems(mediaItems, safeIndex, 0L)
                 exoPlayer.prepare()
                 exoPlayer.play()
+                onSongStarted?.invoke(song, playlist)
             }
         } catch (e: Exception) {}
+    }
+
+    /** Plays an entire playlist from the beginning, optionally with shuffle enabled */
+    fun playAll(playlist: List<SongItem>, shuffle: Boolean = false) {
+        if (playlist.isEmpty()) return
+        exoPlayer.shuffleModeEnabled = shuffle
+        _shuffleModeEnabled.value = shuffle
+        val startIndex = if (shuffle) (0 until playlist.size).random() else 0
+        playSong(playlist[startIndex], playlist)
+    }
+
+    fun toggleShuffle() {
+        val nextState = !exoPlayer.shuffleModeEnabled
+        exoPlayer.shuffleModeEnabled = nextState
+        _shuffleModeEnabled.value = nextState
+    }
+
+    fun cycleRepeatMode() {
+        val nextMode = when (exoPlayer.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+        exoPlayer.repeatMode = nextMode
+        _repeatMode.value = nextMode
     }
 
     fun togglePlay() {

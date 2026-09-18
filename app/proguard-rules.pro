@@ -6,8 +6,16 @@
     public static int i(...);
 }
 
-# ── Data models — keep all fields for JSON deserialization ───────────────────
+# ── Data models — keep all fields for JSON & Firestore deserialization ────────
 -keep class com.brave.jsabmusic.api.model.** { *; }
+
+# ── Firebase & Google Play Services Auth ──────────────────────────────────────
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-keep class com.brave.jsabmusic.firebase.** { *; }
 
 # ── OkHttp — required for network calls ──────────────────────────────────────
 -dontwarn okhttp3.**
@@ -47,6 +55,5 @@
 -keep class androidx.webkit.** { *; }
 
 # ── Aggressive Optimization flags ─────────────────────────────────────────────
--repackageclasses 'com.brave.jsabmusic.internal'
 -allowaccessmodification
 -mergeinterfacesaggressively

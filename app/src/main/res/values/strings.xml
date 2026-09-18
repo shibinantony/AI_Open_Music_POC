@@ -1,7 +1,8 @@
 <resources>
     <string name="app_name">JSAB Music</string>
+    <string name="app_tagline">Enjoy the beauty of sovereign music</string>
     <string name="channel_id">jsab_music_playback</string>
-    <string name="channel_name">JioSaavn Music Playback</string>
+    <string name="channel_name">JSAB Sovereign Music Playback</string>
     <string name="channel_description">Active media playback and lock screen controls</string>
     <string name="sleep_timer_title">Sleep Timer</string>
     <string name="sleep_timer_off">Sleep Timer Off</string>
@@ -11,4 +12,9 @@
     <string name="action_next">Next Track</string>
     <string name="action_previous">Previous Track</string>
     <string name="action_stop">Stop</string>
+    <string name="action_shuffle_all">Shuffle All</string>
+    <string name="action_play_all">Play All</string>
+    <string name="tab_explore">Explore</string>
+    <string name="tab_liked_music">Liked Music</string>
+    <string name="tab_recent">Recently Listened</string>
 </resources>

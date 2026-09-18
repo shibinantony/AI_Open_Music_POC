@@ -40,8 +40,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v2.1.0-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v2.1.0-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v2.2.0-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v2.2.0-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -54,29 +54,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v2.1.0
-          name: "JSABMusic v2.1.0 — Bifurcated Search (Songs · Albums · Artists · Playlists)"
+          tag_name: v2.2.0
+          name: "JSABMusic v2.2.0 — Sovereign Blue Aesthetic, Playback Controls & Firebase Cloud Sync"
           body: |
-            ### 🎵 JSABMusic v2.1.0 — Bifurcated Search Engine
+            ### 🎵 JSABMusic v2.2.0 — Enjoy the Beauty of Sovereign Music
             **Engineered for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
 
-            #### 🚀 What's New in v2.1.0:
-            - 🔍 **Tabbed Search Results:** Search now bifurcates results into four dedicated tabs — **Songs**, **Albums**, **Artists**, and **Playlists** — eliminating duplicate tracks caused by song-only search.
-            - ⚡ **Parallel API Queries:** All four JioSaavn search endpoints (`search.getResults`, `search.getAlbumResults`, `search.getArtistResults`, `search.getPlaylistResults`) fire simultaneously using Kotlin coroutines for instant results.
-            - 💿 **Album Drill-Down:** Tapping an album card fetches its full track list (`content.getAlbumDetails`) and queues it for gapless playback.
-            - 🎤 **Artist Drill-Down:** Tapping an artist card fetches their top songs (`artist.getArtistPageDetails`) and starts playback.
-            - 📋 **Playlist Drill-Down:** Tapping a playlist card fetches all its songs (`playlist.getDetails`) and starts playback.
-            - 🔢 **Follower & Track Count Badges:** Albums show track count, Artists show formatted follower count (K/M), Playlists show songs + followers.
-            - 🌊 **Trending Screen Unchanged:** Home screen trending songs list is completely unaffected.
-
-            #### Previous Release (v2.0.2) Highlights:
-            - 🔑 Verified DES 320 kbps key, deep `more_info` schema, Hardware EQ, Background Playback.
+            #### 🚀 What's New in v2.2.0:
+            - 💙 **Sovereign Blue & Doll Mascot Aesthetics:** Completely detached from legacy JioSaavn styling! Features custom serene doll mascot vector iconography, celestial blue theme (`SovereignBlue`), and the official tagline *"Enjoy the beauty of sovereign music"*.
+            - 🔀 **Shuffle All & Play All Engine:** Instant one-tap "Play All" and "Shuffle All" action buttons on Trending, Liked Music, and Recently Listened feeds.
+            - 🔁 **Repeat Mode Controls:** Toggle between `Repeat Off`, `Repeat All`, and `Repeat One` directly in the Now Playing sheet and player controller.
+            - ☁️ **Firebase & Google Authentication:** Seamless Google Sign-In with Firebase Auth. Automatic anonymous session support ensures instant offline or guest listening with zero forced login walls.
+            - ❤️ **Cloud-Synced Liked Music Playlist:** Heart/like any track from the player, mini-player, or list view. Automatically syncs in real-time to Google Cloud Firestore (`users/{uid}/liked_songs`).
+            - 🕒 **7-Day Recently Listened History:** Automatic playback tracking with 7-day retention in Firestore (`users/{uid}/history`), letting you browse and replay your recent music journey.
+            - 🔄 **Reinstall Session Restoration:** Even after deleting and reinstalling the app, signing into your Google account instantly restores your last played song, queue, and liked songs from Firebase.
+            - 🔍 **Bifurcated Search Engine:** Retains 4-tab parallel search (**Songs**, **Albums**, **Artists**, **Playlists**) with instant drill-down streaming.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v2.1.0-release.apk`** below, tap to install, and enjoy instant, crash-free JioSaavn audio with proper categorized search!
+            Download **`JSABMusic-v2.2.0-release.apk`** below, tap to install, and enjoy unconstrained sovereign music!
           files: |
-            dist/JSABMusic-v2.1.0-release.apk
-            dist/JSABMusic-v2.1.0-debug.apk
+            dist/JSABMusic-v2.2.0-release.apk
+            dist/JSABMusic-v2.2.0-debug.apk
           draft: false
           prerelease: false
         env:
