@@ -6,8 +6,8 @@
         <item name="android:windowBackground">@color/amoled_black</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <item name="colorPrimary">@color/saavn_teal</item>
-        <item name="colorSecondary">@color/saavn_teal_accent</item>
+        <item name="colorPrimary">@color/sovereign_blue</item>
+        <item name="colorSecondary">@color/sovereign_blue_accent</item>
         <item name="colorSurface">@color/amoled_surface</item>
     </style>
 </resources>
