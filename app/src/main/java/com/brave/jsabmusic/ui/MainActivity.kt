@@ -811,7 +811,7 @@ fun MainPlayerScreen(
                     val webClientId = if (defaultClientId.isNotEmpty()) {
                         defaultClientId
                     } else {
-                        "1085293847291-webclientidforgooglesignin012345.apps.googleusercontent.com"
+                        "547731593917-hmf6f180abaurt5rsf6ktelqthukrvn5.apps.googleusercontent.com"
                     }
 
                     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)

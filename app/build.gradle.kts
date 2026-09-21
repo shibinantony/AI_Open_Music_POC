@@ -19,14 +19,27 @@ android {
         ndk { abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a", "x86_64")) }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore/jsabmusic.p12")
+            storePassword = "jsabmusic2026"
+            keyAlias = "jsabmusic"
+            keyPassword = "jsabmusic2026"
+            storeType = "PKCS12"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
-        debug { isMinifyEnabled = false }
+        debug {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     compileOptions {
