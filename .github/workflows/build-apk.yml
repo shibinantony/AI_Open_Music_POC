@@ -39,8 +39,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v2.2.0-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v2.2.0-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.0-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.0-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -53,27 +53,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v2.2.0
-          name: "JSABMusic v2.2.0 — Sovereign Blue Aesthetic, Playback Controls & Firebase Cloud Sync"
+          tag_name: v3.0.0
+          name: "JSABMusic v3.0.0 — Background Play, Samsung Lockscreen Widget & Multi-Language Hub"
           body: |
-            ### 🎵 JSABMusic v2.2.0 — Enjoy the Beauty of Sovereign Music
+            ### 🎵 JSABMusic v3.0.0 — Enjoy the Beauty of Sovereign Music
             **Engineered for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
 
-            #### 🚀 What's New in v2.2.0:
-            - 💙 **Sovereign Blue & Doll Mascot Aesthetics:** Completely detached from legacy JioSaavn styling! Features custom serene doll mascot vector iconography, celestial blue theme (`SovereignBlue`), and the official tagline *"Enjoy the beauty of sovereign music"*.
+            #### 🚀 What's New in v3.0.0:
+            - ⚡ **Continuous Background Playback (Samsung One UI Hardened):** Upgraded `PlaybackService` to a persistent Foreground Service with `START_STICKY`, CPU and Wi-Fi keep-alive locks, network wake mode, and Samsung battery optimization bypass to prevent Samsung's Smart Manager / Phantom Process Killer from stopping playback.
+            - 📱 **Lock Screen & AOD Music Player Widget:** System Media Controls with `MediaStyle` notification and `MediaSession` token support. Full lock screen playback widget with Play/Pause, Next Track, Previous Track, track metadata, and real-time high-res album artwork.
+            - 🌐 **Multi-Language Explore Hub:** One-tap dynamic language filter chips covering **English**, **Malayalam**, **Tamil**, **Hindi**, **Kannada**, **International**, and **Others**. Features curated Trending Tracks, Top Albums, Popular Artists, and Featured Playlists with instant drill-down streaming!
             - 🔀 **Shuffle All & Play All Engine:** Instant one-tap "Play All" and "Shuffle All" action buttons on Trending, Liked Music, and Recently Listened feeds.
             - 🔁 **Repeat Mode Controls:** Toggle between `Repeat Off`, `Repeat All`, and `Repeat One` directly in the Now Playing sheet and player controller.
-            - ☁️ **Firebase & Google Authentication:** Seamless Google Sign-In with Firebase Auth. Automatic anonymous session support ensures instant offline or guest listening with zero forced login walls.
-            - ❤️ **Cloud-Synced Liked Music Playlist:** Heart/like any track from the player, mini-player, or list view. Automatically syncs in real-time to Google Cloud Firestore (`users/{uid}/liked_songs`).
-            - 🕒 **7-Day Recently Listened History:** Automatic playback tracking with 7-day retention in Firestore (`users/{uid}/history`), letting you browse and replay your recent music journey.
-            - 🔄 **Reinstall Session Restoration:** Even after deleting and reinstalling the app, signing into your Google account instantly restores your last played song, queue, and liked songs from Firebase.
-            - 🔍 **Bifurcated Search Engine:** Retains 4-tab parallel search (**Songs**, **Albums**, **Artists**, **Playlists**) with instant drill-down streaming.
+            - ☁️ **Full Backward Compatibility:** 100% compatible with existing Firebase Cloud Firestore profiles, liked music, and 7-day history.
+            - 🔍 **Bifurcated Search Engine:** 4-tab parallel search (**Songs**, **Albums**, **Artists**, **Playlists**) with instant drill-down streaming.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v2.2.0-release.apk`** below, tap to install, and enjoy unconstrained sovereign music!
+            Download **`JSABMusic-v3.0.0-release.apk`** below, tap to install, and enjoy unconstrained sovereign music!
           files: |
-            dist/JSABMusic-v2.2.0-release.apk
-            dist/JSABMusic-v2.2.0-debug.apk
+            dist/JSABMusic-v3.0.0-release.apk
+            dist/JSABMusic-v3.0.0-debug.apk
           draft: false
           prerelease: false
         env:

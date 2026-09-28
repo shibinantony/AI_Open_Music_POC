@@ -27,10 +27,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Explore
@@ -90,6 +94,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,6 +102,8 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.brave.jsabmusic.R
 import com.brave.jsabmusic.api.JioSaavnApiClient
+import com.brave.jsabmusic.api.LanguageHomeFeed
+import com.brave.jsabmusic.api.MusicLanguage
 import com.brave.jsabmusic.api.model.AlbumItem
 import com.brave.jsabmusic.api.model.ArtistItem
 import com.brave.jsabmusic.api.model.PlaylistItem
@@ -168,7 +175,7 @@ class MainActivity : ComponentActivity() {
             }
 
             checkNotificationPermission()
-            bindPlaybackService()
+            startAndBindPlaybackService()
         } catch (_: Exception) {}
 
         setContent {
@@ -193,9 +200,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun bindPlaybackService() {
+    private fun startAndBindPlaybackService() {
         try {
             val serviceIntent = Intent(this, PlaybackService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
             bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
         } catch (_: Exception) {}
     }
@@ -209,9 +221,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Navigation & Tab definitions
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 private val SEARCH_TABS = listOf("Songs", "Albums", "Artists", "Playlists")
 private enum class MainNavSection(val label: String) {
@@ -220,9 +232,9 @@ private enum class MainNavSection(val label: String) {
     RECENT("Recent (7d)")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Main Screen
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 fun MainPlayerScreen(
@@ -234,26 +246,29 @@ fun MainPlayerScreen(
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
 
-    // ── Navigation State ─────────────────────────────────────────────────────
+    // â”€â”€ Navigation State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     var currentSection  by remember { mutableStateOf(MainNavSection.EXPLORE) }
     var searchQuery     by remember { mutableStateOf("") }
     var selectedTab     by remember { mutableIntStateOf(0) }
 
-    // ── Data States ──────────────────────────────────────────────────────────
+    // â”€â”€ Data States â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     var songResults     by remember { mutableStateOf<List<SongItem>>(emptyList()) }
     var albumResults    by remember { mutableStateOf<List<AlbumItem>>(emptyList()) }
     var artistResults   by remember { mutableStateOf<List<ArtistItem>>(emptyList()) }
     var playlistResults by remember { mutableStateOf<List<PlaylistItem>>(emptyList()) }
     var trendingSongs   by remember { mutableStateOf(JioSaavnApiClient.getCuratedDefaultSongs()) }
     var isLoading       by remember { mutableStateOf(false) }
+    var selectedLanguage by remember { mutableStateOf(MusicLanguage.ALL) }
+    var homeFeed         by remember { mutableStateOf<LanguageHomeFeed?>(null) }
+    var isFeedLoading    by remember { mutableStateOf(false) }
 
-    // ── Sheets State ─────────────────────────────────────────────────────────
+    // â”€â”€ Sheets State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     var showEqualizer   by remember { mutableStateOf(false) }
     var showSleepTimer  by remember { mutableStateOf(false) }
     var showNowPlaying  by remember { mutableStateOf(false) }
     var showUserProfile by remember { mutableStateOf(false) }
 
-    // ── Reactive Flows ───────────────────────────────────────────────────────
+    // â”€â”€ Reactive Flows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     val currentSong     by playerController.currentSong.collectAsState()
     val isPlaying       by playerController.isPlaying.collectAsState()
     val isTimerRunning  by sleepTimerManager.isTimerRunning.collectAsState()
@@ -261,7 +276,7 @@ fun MainPlayerScreen(
     val likedSongs      by firebaseSyncManager.likedSongs.collectAsState()
     val recentlyListened by firebaseSyncManager.recentlyListened.collectAsState()
 
-    // ── Google Sign In Activity Result Launcher ──────────────────────────────
+    // â”€â”€ Google Sign In Activity Result Launcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -303,12 +318,18 @@ fun MainPlayerScreen(
         }
     }
 
-    // ── Startup: load trending & restore cloud session on reinstall ──────────
-    LaunchedEffect(Unit) {
+    // â”€â”€ Startup: Multi-Language Feed & Restore Cloud Session on Reinstall â”€â”€â”€â”€â”€
+    LaunchedEffect(selectedLanguage) {
+        isFeedLoading = true
         try {
-            val fresh = JioSaavnApiClient.getTrendingSongs()
-            if (fresh.isNotEmpty()) trendingSongs = fresh
+            val feed = JioSaavnApiClient.getHomeFeedForLanguage(selectedLanguage)
+            homeFeed = feed
+            if (feed.trendingSongs.isNotEmpty()) {
+                trendingSongs = feed.trendingSongs
+            }
         } catch (_: Exception) {}
+        isFeedLoading = false
+    }
 
         // Restore cloud session if app was reinstalled or fresh launched
         try {
@@ -322,7 +343,7 @@ fun MainPlayerScreen(
         } catch (_: Exception) {}
     }
 
-    // ── Search trigger ───────────────────────────────────────────────────────
+    // â”€â”€ Search trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     fun triggerSearch(query: String) {
         if (query.length < 2) {
             songResults = emptyList(); albumResults = emptyList()
@@ -342,7 +363,7 @@ fun MainPlayerScreen(
         }
     }
 
-    // ── Layout ───────────────────────────────────────────────────────────────
+    // â”€â”€ Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     Scaffold(
         containerColor = AmoledBlack,
         modifier = Modifier
@@ -361,7 +382,7 @@ fun MainPlayerScreen(
                     .padding(horizontal = 16.dp)
             ) {
 
-                // ── Header Bar with Peaceful Doll Mascot ─────────────────────
+                // â”€â”€ Header Bar with Peaceful Doll Mascot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -453,7 +474,7 @@ fun MainPlayerScreen(
                     }
                 }
 
-                // ── Main Section Switcher (Explore | Liked Music | Recent) ────
+                // â”€â”€ Main Section Switcher (Explore | Liked Music | Recent) â”€â”€â”€â”€
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -506,7 +527,7 @@ fun MainPlayerScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // ── Section Content ──────────────────────────────────────────
+                // â”€â”€ Section Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 when (currentSection) {
                     MainNavSection.EXPLORE -> {
                         // Search Bar
@@ -568,12 +589,18 @@ fun MainPlayerScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                         } else {
+                            LanguageFilterChips(
+                                selectedLanguage = selectedLanguage,
+                                onLanguageSelected = { selectedLanguage = it }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
                             PlayAllHeaderRow(
-                                title = "Trending Today (320 Kbps)",
+                                title = "Trending ${selectedLanguage.displayName} (320 Kbps)",
                                 onPlayAll = { playerController.playAll(trendingSongs, shuffle = false) },
                                 onShuffleAll = { playerController.playAll(trendingSongs, shuffle = true) },
                                 isEnabled = trendingSongs.isNotEmpty()
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
 
                         // Content List
@@ -635,14 +662,40 @@ fun MainPlayerScreen(
                                 )
                             }
                         } else {
-                            SongList(
-                                songs = trendingSongs,
+                            ExploreLanguageHub(
+                                homeFeed = homeFeed,
+                                trendingSongs = trendingSongs,
                                 currentSong = currentSong,
                                 isPlaying = isPlaying,
                                 likedSongs = likedSongs,
                                 firebaseSyncManager = firebaseSyncManager,
-                                modifier = Modifier.weight(1f),
-                                onSongClick = { song -> playerController.playSong(song, trendingSongs) }
+                                playerController = playerController,
+                                isFeedLoading = isFeedLoading,
+                                onAlbumClick = { album ->
+                                    scope.launch {
+                                        isLoading = true
+                                        val songs = JioSaavnApiClient.getAlbumSongs(album.id)
+                                        isLoading = false
+                                        if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
+                                    }
+                                },
+                                onArtistClick = { artist ->
+                                    scope.launch {
+                                        isLoading = true
+                                        val songs = JioSaavnApiClient.getArtistSongs(artist.id)
+                                        isLoading = false
+                                        if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
+                                    }
+                                },
+                                onPlaylistClick = { playlist ->
+                                    scope.launch {
+                                        isLoading = true
+                                        val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id)
+                                        isLoading = false
+                                        if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
@@ -687,7 +740,7 @@ fun MainPlayerScreen(
                 }
             }
 
-            // ── Persistent Mini-Player Bar ────────────────────────────────────
+            // â”€â”€ Persistent Mini-Player Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (currentSong != null) {
                 val isSongLiked = likedSongs.any { it.id == currentSong?.id }
 
@@ -777,7 +830,7 @@ fun MainPlayerScreen(
         }
     }
 
-    // ── Modal Sheets ──────────────────────────────────────────────────────────
+    // â”€â”€ Modal Sheets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (showNowPlaying) {
         NowPlayingSheet(
             playerController = playerController,
@@ -829,9 +882,9 @@ fun MainPlayerScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Play All & Shuffle All Header Row
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 private fun PlayAllHeaderRow(
@@ -915,9 +968,9 @@ private fun PlayAllHeaderRow(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // User Profile & Google Account Sheet
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -926,6 +979,7 @@ private fun UserProfileSheet(
     onSignInClick: () -> Unit,
     onDismissRequest: () -> Unit
 ) {
+    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val user by firebaseSyncManager.currentUser.collectAsState()
     val likedSongs by firebaseSyncManager.likedSongs.collectAsState()
@@ -1091,6 +1145,47 @@ private fun UserProfileSheet(
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Samsung One UI Background Optimization Whitelist
+            OutlinedButton(
+                onClick = {
+                    try {
+                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        try {
+                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    }
+                },
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, SovereignBlue.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BatteryChargingFull,
+                        contentDescription = null,
+                        tint = SovereignBlue,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Samsung Background Play Setup",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
             if (showProfileDialog) {
                 var inputName by remember { mutableStateOf(if (user?.isAnonymous == false) (user?.displayName ?: "") else "") }
                 var inputEmail by remember { mutableStateOf(user?.email ?: "") }
@@ -1162,9 +1257,9 @@ private fun UserProfileSheet(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Tab bar
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 private fun SearchTabBar(
@@ -1201,9 +1296,9 @@ private fun SearchTabBar(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Song list
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 private fun SongList(
@@ -1239,9 +1334,9 @@ private fun SongList(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Album list
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 private fun AlbumList(
@@ -1301,7 +1396,7 @@ private fun AlbumCard(album: AlbumItem, onClick: () -> Unit) {
                     text = buildString {
                         if (album.artist.isNotEmpty()) append(album.artist)
                         if (album.year.isNotEmpty()) {
-                            if (album.artist.isNotEmpty()) append(" · ")
+                            if (album.artist.isNotEmpty()) append(" Â· ")
                             append(album.year)
                         }
                     },
@@ -1330,9 +1425,9 @@ private fun AlbumCard(album: AlbumItem, onClick: () -> Unit) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Artist list
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 private fun ArtistList(
@@ -1431,9 +1526,9 @@ private fun ArtistCard(artist: ArtistItem, onClick: () -> Unit) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Playlist list
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 private fun PlaylistList(
@@ -1510,7 +1605,7 @@ private fun PlaylistCard(playlist: PlaylistItem, onClick: () -> Unit) {
                     text = buildString {
                         if (playlist.songCount > 0) append("${playlist.songCount} songs")
                         if (playlist.followerCount.isNotEmpty() && playlist.followerCount != "0") {
-                            if (playlist.songCount > 0) append(" · ")
+                            if (playlist.songCount > 0) append(" Â· ")
                             append("${formatFollowers(playlist.followerCount)} followers")
                         }
                     }.ifEmpty { "Playlist" },
@@ -1537,9 +1632,9 @@ private fun PlaylistCard(playlist: PlaylistItem, onClick: () -> Unit) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Shared: SongRowItem with Like Button
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 fun SongRowItem(
@@ -1619,9 +1714,9 @@ fun SongRowItem(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 private fun EmptyState(message: String, modifier: Modifier = Modifier) {
@@ -1641,5 +1736,293 @@ private fun formatFollowers(raw: String): String {
         count >= 1_000_000 -> "${count / 1_000_000}M"
         count >= 1_000     -> "${count / 1_000}K"
         else               -> count.toString()
+    }
+}
+
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Multi-Language Home Hub Components
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@Composable
+private fun LanguageFilterChips(
+    selectedLanguage: MusicLanguage,
+    onLanguageSelected: (MusicLanguage) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(MusicLanguage.values(), key = { it.code }) { lang ->
+            val isSelected = lang == selectedLanguage
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = if (isSelected) SovereignBlue else AmoledCard,
+                border = BorderStroke(1.dp, if (isSelected) SovereignBlue else Color(0xFF1E293B)),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable { onLanguageSelected(lang) }
+            ) {
+                Text(
+                    text = lang.displayName,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) AmoledBlack else TextSecondary,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Bold,
+        color = TextPrimary,
+        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun HorizontalAlbumRow(
+    albums: List<AlbumItem>,
+    onAlbumClick: (AlbumItem) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(albums, key = { it.id }) { album ->
+            Column(
+                modifier = Modifier
+                    .width(120.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onAlbumClick(album) }
+            ) {
+                AsyncImage(
+                    model = album.artworkUrl,
+                    contentDescription = album.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = album.name,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = album.artist.ifEmpty { "Album" },
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HorizontalArtistRow(
+    artists: List<ArtistItem>,
+    onArtistClick: (ArtistItem) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        items(artists, key = { it.id }) { artist ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .width(84.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onArtistClick(artist) }
+            ) {
+                if (artist.artworkUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = artist.artworkUrl,
+                        contentDescription = artist.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(CircleShape)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(CircleShape)
+                            .background(AmoledCard),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = SovereignBlue,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = artist.name,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HorizontalPlaylistRow(
+    playlists: List<PlaylistItem>,
+    onPlaylistClick: (PlaylistItem) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(playlists, key = { it.id }) { playlist ->
+            Column(
+                modifier = Modifier
+                    .width(120.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onPlaylistClick(playlist) }
+            ) {
+                AsyncImage(
+                    model = playlist.artworkUrl,
+                    contentDescription = playlist.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = playlist.name,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${playlist.songCount} tracks",
+                    fontSize = 11.sp,
+                    color = TextSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExploreLanguageHub(
+    homeFeed: LanguageHomeFeed?,
+    trendingSongs: List<SongItem>,
+    currentSong: SongItem?,
+    isPlaying: Boolean,
+    likedSongs: List<SongItem>,
+    firebaseSyncManager: FirebaseSyncManager,
+    playerController: PlayerController,
+    isFeedLoading: Boolean,
+    onAlbumClick: (AlbumItem) -> Unit,
+    onArtistClick: (ArtistItem) -> Unit,
+    onPlaylistClick: (PlaylistItem) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val likedIds = remember(likedSongs) { likedSongs.map { it.id }.toSet() }
+
+    if (isFeedLoading && trendingSongs.isEmpty()) {
+        Box(
+            modifier = modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = SovereignBlue)
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Top Trending songs (first 10)
+        items(trendingSongs.take(10), key = { it.id }) { song ->
+            SongRowItem(
+                song = song,
+                isCurrentlyPlaying = currentSong?.id == song.id && isPlaying,
+                isLiked = likedIds.contains(song.id),
+                onLikeToggle = { firebaseSyncManager.toggleLike(song) },
+                onClick = { playerController.playSong(song, trendingSongs) }
+            )
+        }
+
+        // Top Albums Section
+        if (homeFeed?.topAlbums?.isNotEmpty() == true) {
+            item {
+                SectionHeader("Top Albums")
+                HorizontalAlbumRow(
+                    albums = homeFeed.topAlbums,
+                    onAlbumClick = onAlbumClick
+                )
+            }
+        }
+
+        // Popular Artists Section
+        if (homeFeed?.topArtists?.isNotEmpty() == true) {
+            item {
+                SectionHeader("Popular Artists")
+                HorizontalArtistRow(
+                    artists = homeFeed.topArtists,
+                    onArtistClick = onArtistClick
+                )
+            }
+        }
+
+        // Featured Playlists Section
+        if (homeFeed?.topPlaylists?.isNotEmpty() == true) {
+            item {
+                SectionHeader("Featured Playlists")
+                HorizontalPlaylistRow(
+                    playlists = homeFeed.topPlaylists,
+                    onPlaylistClick = onPlaylistClick
+                )
+            }
+        }
+
+        // Additional trending songs (if > 10)
+        if (trendingSongs.size > 10) {
+            item {
+                SectionHeader("More Trending Tracks")
+            }
+            items(trendingSongs.drop(10), key = { it.id }) { song ->
+                SongRowItem(
+                    song = song,
+                    isCurrentlyPlaying = currentSong?.id == song.id && isPlaying,
+                    isLiked = likedIds.contains(song.id),
+                    onLikeToggle = { firebaseSyncManager.toggleLike(song) },
+                    onClick = { playerController.playSong(song, trendingSongs) }
+                )
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(90.dp)) }
     }
 }

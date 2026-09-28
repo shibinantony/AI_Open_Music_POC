@@ -1,13 +1,23 @@
 package com.brave.jsabmusic.player
 
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
+import android.os.Build
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.brave.jsabmusic.api.model.SongItem
 import com.brave.jsabmusic.equalizer.HardwareEqualizerManager
+import com.brave.jsabmusic.service.PlaybackService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,15 +27,27 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 /**
- * High-performance centralized audio playback controller powered by AndroidX Media3 / ExoPlayer.
- * Orchestrates 320 kbps CDN playback, gapless playlist transitions, hardware DSP effects,
- * shuffle, and repeat modes.
+ * Enterprise Audio Playback Controller powered by AndroidX Media3 / ExoPlayer.
+ * Orchestrates 320 kbps CDN playback, gapless transitions, audio focus management,
+ * Samsung One UI background survivability, lock screen widget integration, shuffle, and repeat modes.
  */
 class PlayerController(private val context: Context) {
 
-    val exoPlayer: ExoPlayer = ExoPlayer.Builder(context).build()
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+        .build()
+
+    val exoPlayer: ExoPlayer = ExoPlayer.Builder(context)
+        .setAudioAttributes(audioAttributes, true) // Handles incoming calls & audio focus seamlessly
+        .setWakeMode(C.WAKE_MODE_NETWORK)          // Prevents CPU sleep while network streaming
+        .setHandleAudioBecomingNoisy(true)        // Pauses playback automatically when headphones unplug
+        .build()
+
     val equalizerManager = HardwareEqualizerManager(context)
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
@@ -62,6 +84,7 @@ class PlayerController(private val context: Context) {
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
                 if (playing) {
+                    startPlaybackServiceForeground()
                     startProgressTracker()
                     equalizerManager.attachToAudioSession(exoPlayer.audioSessionId)
                 } else {
@@ -84,6 +107,7 @@ class PlayerController(private val context: Context) {
                     if (song != null) {
                         _currentSong.value = song
                         currentIndex = _queue.value.indexOf(song)
+                        loadArtworkBytesForLockscreen(song)
                         onSongStarted?.invoke(song, _queue.value)
                     }
                 }
@@ -111,6 +135,52 @@ class PlayerController(private val context: Context) {
         })
     }
 
+    private fun startPlaybackServiceForeground() {
+        try {
+            val serviceIntent = Intent(context, PlaybackService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun loadArtworkBytesForLockscreen(song: SongItem) {
+        if (song.highResArtworkUrl.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                val imageLoader = ImageLoader(context)
+                val request = ImageRequest.Builder(context)
+                    .data(song.highResArtworkUrl)
+                    .allowHardware(false)
+                    .build()
+                val result = (imageLoader.execute(request) as? SuccessResult)?.drawable
+                val bitmap = (result as? BitmapDrawable)?.bitmap
+                if (bitmap != null) {
+                    val stream = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
+                    val artworkBytes = stream.toByteArray()
+
+                    withContext(Dispatchers.Main) {
+                        val currentItem = exoPlayer.currentMediaItem
+                        if (currentItem != null && currentItem.mediaId == song.id) {
+                            val updatedMetadata = currentItem.mediaMetadata.buildUpon()
+                                .setArtworkData(artworkBytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                                .build()
+                            val updatedItem = currentItem.buildUpon()
+                                .setMediaMetadata(updatedMetadata)
+                                .build()
+                            if (exoPlayer.currentMediaItemIndex in 0 until exoPlayer.mediaItemCount) {
+                                exoPlayer.replaceMediaItem(exoPlayer.currentMediaItemIndex, updatedItem)
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun createMediaItem(item: SongItem): MediaItem? {
         if (item.directStreamUrl.isEmpty()) return null
         val metadata = MediaMetadata.Builder()
@@ -133,6 +203,8 @@ class PlayerController(private val context: Context) {
 
     fun playSong(song: SongItem, playlist: List<SongItem> = listOf(song)) {
         try {
+            startPlaybackServiceForeground()
+
             _queue.value = playlist
             currentIndex = playlist.indexOf(song).coerceAtLeast(0)
             _currentSong.value = song
@@ -148,6 +220,7 @@ class PlayerController(private val context: Context) {
                 exoPlayer.shuffleModeEnabled = _shuffleModeEnabled.value
                 exoPlayer.prepare()
                 exoPlayer.play()
+                loadArtworkBytesForLockscreen(song)
             }
         } catch (e: Exception) {
             android.util.Log.e("PlayerController", "Playback failed", e)
@@ -196,6 +269,7 @@ class PlayerController(private val context: Context) {
         if (exoPlayer.isPlaying) {
             exoPlayer.pause()
         } else {
+            startPlaybackServiceForeground()
             exoPlayer.play()
         }
     }

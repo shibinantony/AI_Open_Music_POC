@@ -1,4 +1,4 @@
-# AI Open Music Architecture (JSABMusic v2.2.0)
+# AI Open Music Architecture (JSABMusic v3.0.0)
 ### *Pure Native AndroidX Media3 Audio Player & 320 kbps Direct CDN Framework for Android 16 & Samsung One UI 8.5*
 
 [![Platform](https://img.shields.io/badge/Platform-Android%2014%20|%2015%20|%2016-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/16)
@@ -6,12 +6,12 @@
 [![Audio Quality](https://img.shields.io/badge/Audio%20Fidelity-320%20kbps%20Pristine%20AAC-38BDF8?logo=audiomack&logoColor=white)](#core-technical-innovations)
 [![Cloud Sync](https://img.shields.io/badge/Cloud%20Sync-Firebase%20%2B%20Google%20Auth-FFCA28?logo=firebase&logoColor=black)](#firebase-cloud-architecture)
 [![GitHub Releases](https://img.shields.io/github/v/release/shibinantony/AI_Open_Music_POC?color=38BDF8&label=Latest%20Release&logo=github)](https://github.com/shibinantony/AI_Open_Music_POC/releases/latest)
-[![Version](https://img.shields.io/badge/Version-v2.2.0-38BDF8)](CHANGELOG.md)
-[![Binary Footprint](https://img.shields.io/badge/Binary%20Footprint-%3C%205.8%20MB%20(R8%20Full%20Mode)-brightgreen)](#)
+[![Version](https://img.shields.io/badge/Version-v3.0.0-38BDF8)](CHANGELOG.md)
+[![Binary Footprint](https://img.shields.io/badge/Binary%20Footprint-%3C%206.5%20MB%20(R8%20Full%20Mode)-brightgreen)](#)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > ### 🚀 [Download Latest Production APK from GitHub Releases](https://github.com/shibinantony/AI_Open_Music_POC/releases/latest)
-> **Direct APK Downloads:** [**`JSABMusic-v2.2.0-release.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v2.2.0/JSABMusic-v2.2.0-release.apk) &bull; [**`JSABMusic-v2.2.0-debug.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v2.2.0/JSABMusic-v2.2.0-debug.apk) &bull; [**View All Releases & Assets &rarr;**](https://github.com/shibinantony/AI_Open_Music_POC/releases)
+> **Direct APK Downloads:** [**`JSABMusic-v3.0.0-release.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.0/JSABMusic-v3.0.0-release.apk) &bull; [**`JSABMusic-v3.0.0-debug.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.0/JSABMusic-v3.0.0-debug.apk) &bull; [**View All Releases & Assets &rarr;**](https://github.com/shibinantony/AI_Open_Music_POC/releases)
 
 ---
 
@@ -21,19 +21,21 @@
 
 Mobile web wrappers face insurmountable platform restrictions when interfacing with streaming services: the web platform is aggressively funneled into client-side app-install walls, pauses playback on mobile browsers, and exhausts memory through desktop ad-bidding frameworks.
 
-**JSABMusic v2.2.0** introduces a complete brand and aesthetic transformation away from third-party styling into a serene, peaceful music universe:
+**JSABMusic v3.0.0** introduces critical platform engineering for Samsung One UI & Android 16 alongside a rich Multi-Language Explore Hub:
 
+* **Rock-Solid Continuous Background Playback (Samsung One UI Hardened):** Upgraded `PlaybackService` to a persistent Foreground Service with `START_STICKY`, CPU and Wi-Fi keep-alive locks, network wake mode, and Samsung battery optimization bypass to prevent Samsung's Smart Manager / Phantom Process Killer from stopping playback. Audio plays continuously like Spotify even when apps are swiped away.
+* **Samsung Lock Screen & AOD Music Player Widget:** Integrates with Android's System Media Controls via `MediaStyle` notification and `MediaSession` token support. Lock screen displays full player controls (Play/Pause, Next Track, Previous Track, Seekbar) and real-time high-res album artwork.
+* **Multi-Language Explore Hub:** One-tap dynamic language filter chips covering **English**, **Malayalam**, **Tamil**, **Hindi**, **Kannada**, **International**, and **Others**. Features curated Trending Tracks, Top Albums, Popular Artists, and Featured Playlists with instant drill-down streaming!
 * **Serene Sovereign Blue & Peaceful Doll Mascot:** Redesigned from the ground up with a custom peaceful doll mascot vector emblem wearing studio headphones, serene celestial blue theme (`SovereignBlue`), and the official motto: *"Enjoy the beauty of sovereign music"*.
 * **Protocol-Level 0% Advertisements:** Connects directly to high-speed Akamai and Cloudflare CDNs (`saavncdn.com`). Songs are streamed pure and unadulterated without touching any ad networks or telemetry SDKs.
 * **Pristine 320 kbps High-Fidelity Audio:** Implements hardware DES decryption (`DES/ECB/PKCS5Padding`) to resolve encrypted media tokens directly into full-bitrate `320 kbps AAC/MP4` streams.
 * **Full Playback Controls (Shuffle & Repeat):** One-tap **Play All** and **Shuffle All** buttons across all playlists and feeds, plus **Repeat All / Repeat One / Repeat Off** modes.
-* **Firebase Cloud Sync & Google Authentication:** Seamless Google Sign-In with Firebase Auth. Automatic guest session fallback ensures zero login walls.
+* **Firebase Cloud Sync & Google Authentication:** Seamless Google Sign-In with Firebase Auth. Automatic guest session fallback ensures zero login walls. Fully backward compatible with existing user databases.
 * **Cloud-Synced Liked Music Playlist:** Heart any track from the player, mini-player, or list view. Automatically syncs in real-time to Google Cloud Firestore (`users/{uid}/liked_songs`).
 * **7-Day Recently Listened History:** Automatic playback tracking with 7-day retention in Firestore (`users/{uid}/history`), letting you browse and replay your recent music journey.
 * **Reinstall Session Restoration:** Even after deleting and reinstalling the app, signing into your Google account instantly restores your last played song, queue, and liked songs from Firebase.
 * **Bifurcated Search Engine:** 4-tab parallel search (**Songs**, **Albums**, **Artists**, **Playlists**) with instant drill-down streaming.
 * **Samsung Hardware Audio HAL Equalizer:** Directly interfaces with Samsung Galaxy S24 FE hardware audio DSP via `android.media.audiofx.Equalizer` and `BassBoost`.
-* **Persistent Screen-Off Background Engine:** Android 14/15/16 compliant `MediaSessionService` with lock-screen notification controls and Bluetooth media triggers.
 
 ---
 

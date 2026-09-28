@@ -17,6 +17,31 @@ import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 /**
+ * Supported Music Languages for dynamic trending feed curation and exploration.
+ */
+enum class MusicLanguage(val code: String, val displayName: String, val searchKeyword: String) {
+    ALL("all", "All", "Trending Today"),
+    ENGLISH("english", "English", "English Pop Hits"),
+    MALAYALAM("malayalam", "Malayalam", "Malayalam Top Hits"),
+    TAMIL("tamil", "Tamil", "Tamil Top Hits"),
+    HINDI("hindi", "Hindi", "Hindi Top Hits"),
+    KANNADA("kannada", "Kannada", "Kannada Top Hits"),
+    INTERNATIONAL("international", "International", "Billboard Hot 100"),
+    OTHERS("others", "Others", "Telugu Punjabi Regional Hits")
+}
+
+/**
+ * Aggregated Home Feed payload grouped by selected Language.
+ */
+data class LanguageHomeFeed(
+    val language: MusicLanguage,
+    val trendingSongs: List<SongItem> = emptyList(),
+    val topAlbums: List<AlbumItem> = emptyList(),
+    val topArtists: List<ArtistItem> = emptyList(),
+    val topPlaylists: List<PlaylistItem> = emptyList()
+)
+
+/**
  * High-performance, asynchronous REST Client communicating directly with JioSaavn's JSON API.
  * Uses verified schemas from open-source references (sumitkolhe/jiosaavn-api)
  * to resolve pristine 320 kbps Akamai/Cloudflare CDN media links.
@@ -31,6 +56,36 @@ object JioSaavnApiClient {
     private const val BASE_URL = "https://www.jiosaavn.com/api.php"
     private val BROWSER_UA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Multi-Language Home Feed Engine
+    // ─────────────────────────────────────────────────────────────────────────
+
+    suspend fun getHomeFeedForLanguage(language: MusicLanguage): LanguageHomeFeed = coroutineScope {
+        val query = language.searchKeyword
+
+        val songsDeferred = async { searchSongs(query) }
+        val albumsDeferred = async { searchAlbums("$query Albums") }
+        val artistsDeferred = async { searchArtists("$query Artists") }
+        val playlistsDeferred = async { searchPlaylists("$query Playlists") }
+
+        var songs = songsDeferred.await()
+        var albums = albumsDeferred.await()
+        var artists = artistsDeferred.await()
+        var playlists = playlistsDeferred.await()
+
+        if (songs.isEmpty()) {
+            songs = getCuratedSongsForLanguage(language)
+        }
+
+        LanguageHomeFeed(
+            language = language,
+            trendingSongs = songs,
+            topAlbums = albums,
+            topArtists = artists,
+            topPlaylists = playlists
+        )
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Parallel search — all four categories at once
@@ -148,8 +203,8 @@ object JioSaavnApiClient {
             val json = JSONObject(body)
             val list = json.optJSONArray("list") ?: json.optJSONArray("songs") ?: return@withContext songs
             for (i in 0 until list.length()) {
-                val song = parseSongJson(list.optJSONObject(i) ?: continue)
-                if (song != null) songs.add(song)
+                val s = parseSongJson(list.optJSONObject(i) ?: continue)
+                if (s != null) songs.add(s)
             }
         } catch (_: Exception) {}
         songs
@@ -161,39 +216,31 @@ object JioSaavnApiClient {
     suspend fun getArtistSongs(artistId: String): List<SongItem> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<SongItem>()
         try {
-            val url = "$BASE_URL?__call=artist.getArtistPageDetails&artistId=$artistId&_format=json&_marker=0&api_version=4&page=0&category=latest&sort_order=desc&includeMetaTags=0"
+            val url = "$BASE_URL?__call=artist.getArtistPageDetails&artistId=$artistId&_format=json&_marker=0&api_version=4&n_song=30"
             val body = getJson(url) ?: return@withContext songs
             val json = JSONObject(body)
-            // Top songs live inside topSongs array
-            val topSongsObj = json.optJSONObject("topSongs")
-            val list = topSongsObj?.optJSONArray("songs")
-                ?: json.optJSONArray("topSongs")
-                ?: json.optJSONArray("songs")
-                ?: return@withContext songs
+            val list = json.optJSONArray("topSongs") ?: json.optJSONArray("songs") ?: return@withContext songs
             for (i in 0 until list.length()) {
-                val song = parseSongJson(list.optJSONObject(i) ?: continue)
-                if (song != null) songs.add(song)
+                val s = parseSongJson(list.optJSONObject(i) ?: continue)
+                if (s != null) songs.add(s)
             }
         } catch (_: Exception) {}
         songs
     }
 
     /**
-     * Fetches all songs for a given playlist ID (list ID).
+     * Fetches all songs inside a JioSaavn playlist.
      */
-    suspend fun getPlaylistSongs(listId: String): List<SongItem> = withContext(Dispatchers.IO) {
+    suspend fun getPlaylistSongs(playlistId: String): List<SongItem> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<SongItem>()
         try {
-            val url = "$BASE_URL?__call=playlist.getDetails&listid=$listId&_format=json&_marker=0&api_version=4"
+            val url = "$BASE_URL?__call=playlist.getDetails&listid=$playlistId&_format=json&_marker=0&api_version=4"
             val body = getJson(url) ?: return@withContext songs
             val json = JSONObject(body)
-            val list = json.optJSONArray("list")
-                ?: json.optJSONArray("songs")
-                ?: json.optJSONObject("more_info")?.optJSONArray("songs")
-                ?: return@withContext songs
+            val list = json.optJSONArray("list") ?: json.optJSONArray("songs") ?: return@withContext songs
             for (i in 0 until list.length()) {
-                val song = parseSongJson(list.optJSONObject(i) ?: continue)
-                if (song != null) songs.add(song)
+                val s = parseSongJson(list.optJSONObject(i) ?: continue)
+                if (s != null) songs.add(s)
             }
         } catch (_: Exception) {}
         songs
@@ -208,8 +255,6 @@ object JioSaavnApiClient {
      */
     suspend fun getTrendingSongs(): List<SongItem> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<SongItem>()
-
-        // Official JioSaavn Top Chart Playlists: Trending Today, Weekly Top 20, Hindi Hitlist
         val trendingPlaylistIds = listOf("82914609", "110858205", "51124653")
 
         for (listId in trendingPlaylistIds) {
@@ -222,14 +267,82 @@ object JioSaavnApiClient {
             } catch (_: Exception) {}
         }
 
-        // Fallback: search for top hits if playlist endpoint had transient issue
         if (songs.isEmpty()) {
-            val fallback = searchSongs("Top Hindi Songs")
+            val fallback = searchSongs("Top Hits Songs")
             if (fallback.isNotEmpty()) return@withContext fallback
             return@withContext getCuratedDefaultSongs()
         }
 
         songs
+    }
+
+    /**
+     * Curated high-fidelity 320 kbps tracks available offline / instant launch for each language.
+     */
+    fun getCuratedSongsForLanguage(language: MusicLanguage): List<SongItem> {
+        return when (language) {
+            MusicLanguage.MALAYALAM -> listOf(
+                SongItem(
+                    id = "mal_1",
+                    title = "Illuminati",
+                    artist = "Sushin Shyam, Dabzee",
+                    album = "Aavesham",
+                    durationSeconds = 193L,
+                    highResArtworkUrl = "https://c.saavncdn.com/974/Aavesham-Malayalam-2024-20240419131015-500x500.jpg",
+                    directStreamUrl = "https://aac.saavncdn.com/974/c776c5db6175e11bbcdadcb6c52a0a33_320.mp4"
+                ),
+                SongItem(
+                    id = "mal_2",
+                    title = "Jaada",
+                    artist = "Sushin Shyam, Sreenath Bhasi",
+                    album = "Aavesham",
+                    durationSeconds = 212L,
+                    highResArtworkUrl = "https://c.saavncdn.com/974/Aavesham-Malayalam-2024-20240419131015-500x500.jpg",
+                    directStreamUrl = "https://aac.saavncdn.com/974/c776c5db6175e11bbcdadcb6c52a0a33_320.mp4"
+                )
+            )
+            MusicLanguage.TAMIL -> listOf(
+                SongItem(
+                    id = "tam_1",
+                    title = "Hukum - Thalaivar Alappara",
+                    artist = "Anirudh Ravichander, Super Subu",
+                    album = "Jailer",
+                    durationSeconds = 207L,
+                    highResArtworkUrl = "https://c.saavncdn.com/131/Jailer-Tamil-2023-20230728190800-500x500.jpg",
+                    directStreamUrl = "https://aac.saavncdn.com/131/a160868f0cb184ba33e387be5896a7ef_320.mp4"
+                ),
+                SongItem(
+                    id = "tam_2",
+                    title = "Badass",
+                    artist = "Anirudh Ravichander",
+                    album = "Leo",
+                    durationSeconds = 229L,
+                    highResArtworkUrl = "https://c.saavncdn.com/014/Leo-Tamil-2023-20231020104612-500x500.jpg",
+                    directStreamUrl = "https://aac.saavncdn.com/014/19f123f15ba3cbe31122a28189c46ce1_320.mp4"
+                )
+            )
+            MusicLanguage.ENGLISH, MusicLanguage.INTERNATIONAL -> listOf(
+                SongItem(
+                    id = "eng_1",
+                    title = "Blinding Lights",
+                    artist = "The Weeknd",
+                    album = "After Hours",
+                    durationSeconds = 200L,
+                    highResArtworkUrl = "https://c.saavncdn.com/267/After-Hours-English-2020-20200320001002-500x500.jpg",
+                    directStreamUrl = "https://aac.saavncdn.com/267/d051a8eb7429188e9bbce75109b81f1e_320.mp4"
+                ),
+                SongItem(
+                    id = "eng_2",
+                    title = "Shape of You",
+                    artist = "Ed Sheeran",
+                    album = "Divide",
+                    durationSeconds = 233L,
+                    highResArtworkUrl = "https://c.saavncdn.com/255/Shape-of-You-English-2017-500x500.jpg",
+                    directStreamUrl = "https://aac.saavncdn.com/255/c2febd353f3a076a406fa37510f31f9f_320.mp4"
+                )
+            )
+            else -> getCuratedDefaultSongs()
+        }
     }
 
     /**
