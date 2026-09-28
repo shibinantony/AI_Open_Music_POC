@@ -1,4 +1,4 @@
-# AI Open Music Architecture (JSABMusic v3.0.0)
+# AI Open Music Architecture (JSABMusic v3.0.1)
 ### *Pure Native AndroidX Media3 Audio Player & 320 kbps Direct CDN Framework for Android 16 & Samsung One UI 8.5*
 
 [![Platform](https://img.shields.io/badge/Platform-Android%2014%20|%2015%20|%2016-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/16)
@@ -6,12 +6,12 @@
 [![Audio Quality](https://img.shields.io/badge/Audio%20Fidelity-320%20kbps%20Pristine%20AAC-38BDF8?logo=audiomack&logoColor=white)](#core-technical-innovations)
 [![Cloud Sync](https://img.shields.io/badge/Cloud%20Sync-Firebase%20%2B%20Google%20Auth-FFCA28?logo=firebase&logoColor=black)](#firebase-cloud-architecture)
 [![GitHub Releases](https://img.shields.io/github/v/release/shibinantony/AI_Open_Music_POC?color=38BDF8&label=Latest%20Release&logo=github)](https://github.com/shibinantony/AI_Open_Music_POC/releases/latest)
-[![Version](https://img.shields.io/badge/Version-v3.0.0-38BDF8)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-v3.0.1-38BDF8)](CHANGELOG.md)
 [![Binary Footprint](https://img.shields.io/badge/Binary%20Footprint-%3C%206.5%20MB%20(R8%20Full%20Mode)-brightgreen)](#)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > ### 🚀 [Download Latest Production APK from GitHub Releases](https://github.com/shibinantony/AI_Open_Music_POC/releases/latest)
-> **Direct APK Downloads:** [**`JSABMusic-v3.0.0-release.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.0/JSABMusic-v3.0.0-release.apk) &bull; [**`JSABMusic-v3.0.0-debug.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.0/JSABMusic-v3.0.0-debug.apk) &bull; [**View All Releases & Assets &rarr;**](https://github.com/shibinantony/AI_Open_Music_POC/releases)
+> **Direct APK Downloads:** [**`JSABMusic-v3.0.1-release.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.1/JSABMusic-v3.0.1-release.apk) &bull; [**`JSABMusic-v3.0.1-debug.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.1/JSABMusic-v3.0.1-debug.apk) &bull; [**View All Releases & Assets &rarr;**](https://github.com/shibinantony/AI_Open_Music_POC/releases)
 
 ---
 
@@ -21,10 +21,12 @@
 
 Mobile web wrappers face insurmountable platform restrictions when interfacing with streaming services: the web platform is aggressively funneled into client-side app-install walls, pauses playback on mobile browsers, and exhausts memory through desktop ad-bidding frameworks.
 
-**JSABMusic v3.0.0** introduces critical platform engineering for Samsung One UI & Android 16 alongside a rich Multi-Language Explore Hub:
+**JSABMusic v3.0.1** introduces critical bug fixes and platform optimizations for Samsung One UI & Android 16 alongside a rich Multi-Language Explore Hub:
 
-* **Rock-Solid Continuous Background Playback (Samsung One UI Hardened):** Upgraded `PlaybackService` to a persistent Foreground Service with `START_STICKY`, CPU and Wi-Fi keep-alive locks, network wake mode, and Samsung battery optimization bypass to prevent Samsung's Smart Manager / Phantom Process Killer from stopping playback. Audio plays continuously like Spotify even when apps are swiped away.
-* **Samsung Lock Screen & AOD Music Player Widget:** Integrates with Android's System Media Controls via `MediaStyle` notification and `MediaSession` token support. Lock screen displays full player controls (Play/Pause, Next Track, Previous Track, Seekbar) and real-time high-res album artwork.
+* **Zero Startup ANR (Application Not Responding):** Decoupled service creation from foreground elevation rules so the app opens instantly with zero ANR or watchdog dialogue boxes.
+* **Samsung Lock Screen & AOD Music Player Widget:** System Media Controls with `MediaStyle` notification, `MediaSession` token, and `IMPORTANCE_DEFAULT` public notification channel. Interactive controls (Play/Pause, Next Track, Previous Track, Seekbar) and high-res artwork show reliably on the lock screen and Always On Display.
+* **Instant Zero-Latency Launch & Explore Hub:** Pre-curated instant feeds for 0ms startup delay, paired with parallel background live refresh. Eliminates all waiting spinners and blank screens.
+* **Hardened Continuous Background Playback (Samsung One UI):** Protected by CPU WakeLocks, Wi-Fi high-performance locks, and `START_STICKY` service recovery to prevent Samsung's Smart Manager / Phantom Process Killer from stopping playback. Audio plays continuously like Spotify even when apps are swiped away.
 * **Multi-Language Explore Hub:** One-tap dynamic language filter chips covering **English**, **Malayalam**, **Tamil**, **Hindi**, **Kannada**, **International**, and **Others**. Features curated Trending Tracks, Top Albums, Popular Artists, and Featured Playlists with instant drill-down streaming!
 * **Serene Sovereign Blue & Peaceful Doll Mascot:** Redesigned from the ground up with a custom peaceful doll mascot vector emblem wearing studio headphones, serene celestial blue theme (`SovereignBlue`), and the official motto: *"Enjoy the beauty of sovereign music"*.
 * **Protocol-Level 0% Advertisements:** Connects directly to high-speed Akamai and Cloudflare CDNs (`saavncdn.com`). Songs are streamed pure and unadulterated without touching any ad networks or telemetry SDKs.
@@ -41,7 +43,7 @@ Mobile web wrappers face insurmountable platform restrictions when interfacing w
 
 ## 2. Architectural Comparison Matrix
 
-| Architectural Dimension | Traditional WebView Wrapper | Patched / Cracked APK | JSABMusic v2.2.0 (Pure Native Media3 + Firebase) |
+| Architectural Dimension | Traditional WebView Wrapper | Patched / Cracked APK | JSABMusic v3.0.1 (Pure Native Media3 + Firebase) |
 | :--- | :--- | :--- | :--- |
 | **Advertisement Suppression** | Injected DOM/network blockers | Smali bytecode modification | **100% Zero Ads (Protocol-Level CDN Isolation)** |
 | **Audio Bitrate** | 96–160 kbps (browser-capped) | Dependent on account tier | **Pristine 320 kbps Uncompressed AAC** |
@@ -234,17 +236,16 @@ sequenceDiagram
     actor User as Director / Executive
     participant Device as Samsung Galaxy S24 FE
     participant OS as Samsung One UI 8.5
-    participant App as JSABMusic v2.2.0
+    participant App as JSABMusic v3.0.1
     participant Cloud as Firebase & Google Auth
 
-    User->>Device: Download JSABMusic-v2.2.0-release.apk
+    User->>Device: Download JSABMusic-v3.0.1-release.apk
     Device->>User: Prompt "Install unknown apps" permission
     User->>OS: Grant permission to My Files / Chrome
     OS->>Device: Package Installer verifies and installs APK
-    User->>App: Launch JSABMusic
+    User->>App: Launch JSABMusic (Instant Launch, 0ms ANR)
     App->>OS: Request POST_NOTIFICATIONS for Media Controls
-    User->>OS: Tap "Allow"
-    User->>OS: Set Battery to "Unrestricted" (Critical)
+    User->>OS: Tap "Allow" (Enables Lock Screen & AOD Widget)
     App->>Cloud: Automatically fetch last played session & liked music
     User->>App: Tap profile icon $\rightarrow$ "Sign In with Google" (Optional)
     User->>App: Tap any song / "Play All" / "Shuffle All" $\rightarrow$ 320kbps sovereign music!
@@ -254,16 +255,22 @@ sequenceDiagram
 
 | Asset | Type | Target Device | Direct Download Link |
 | :--- | :--- | :--- | :--- |
-| **`JSABMusic-v2.2.0-release.apk`** | Production Signed | Android 14 / 15 / 16 (Samsung One UI 8.5) | [**Download Release APK**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v2.2.0/JSABMusic-v2.2.0-release.apk) |
-| **`JSABMusic-v2.2.0-debug.apk`** | Debug Build | Android 14 / 15 / 16 (Samsung One UI 8.5) | [**Download Debug APK**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v2.2.0/JSABMusic-v2.2.0-debug.apk) |
+| **`JSABMusic-v3.0.1-release.apk`** | Production Signed | Android 14 / 15 / 16 (Samsung One UI 8.5) | [**Download Release APK**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.1/JSABMusic-v3.0.1-release.apk) |
+| **`JSABMusic-v3.0.1-debug.apk`** | Debug Build | Android 14 / 15 / 16 (Samsung One UI 8.5) | [**Download Debug APK**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.1/JSABMusic-v3.0.1-debug.apk) |
 | **GitHub Releases Hub** | All Versions | All Platforms | [**View Release Page**](https://github.com/shibinantony/AI_Open_Music_POC/releases) |
 
 ---
 
-## 7. QA Checklist (v2.2.0)
+## 7. QA Checklist (v3.0.1)
 
 | Test Case | Expected Behaviour | Category |
 | :--- | :--- | :--- |
+| **Zero Startup ANR** | App launches immediately without any system "Not Responding" dialog | Reliability |
+| **Lock Screen Widget** | Interactive widget with Play/Pause, Prev, Next, Seekbar & Artwork appears when locked | Lock Screen |
+| **AOD Integration** | Media track title and controls appear on Samsung Always On Display | Lock Screen |
+| **Instant Explore Feed** | Explore screen displays curated trending tracks in 0ms with zero loading spinner | Performance |
+| **Language Switch Speed**| Tapping language chips (English, Malayalam, Tamil, etc.) switches content instantly | Performance |
+| **Hardened Background Play**| Playback continues indefinitely in the background even with screen off or other apps open | Background |
 | **Branding** | Header displays peaceful doll mascot icon and "Enjoy the beauty of sovereign music" | Visuals |
 | **Launcher Icon** | App icon displays glowing peaceful doll music emblem | Visuals |
 | **Palette** | Primary accents and active indicators are Sovereign Blue (`#38BDF8`) | Theme |

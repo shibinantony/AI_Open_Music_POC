@@ -205,11 +205,7 @@ class MainActivity : ComponentActivity() {
     private fun startAndBindPlaybackService() {
         try {
             val serviceIntent = Intent(this, PlaybackService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-            } else {
-                startService(serviceIntent)
-            }
+            startService(serviceIntent)
             bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
         } catch (_: Exception) {}
     }
@@ -258,10 +254,10 @@ fun MainPlayerScreen(
     var albumResults    by remember { mutableStateOf<List<AlbumItem>>(emptyList()) }
     var artistResults   by remember { mutableStateOf<List<ArtistItem>>(emptyList()) }
     var playlistResults by remember { mutableStateOf<List<PlaylistItem>>(emptyList()) }
-    var trendingSongs   by remember { mutableStateOf(JioSaavnApiClient.getCuratedDefaultSongs()) }
-    var isLoading       by remember { mutableStateOf(false) }
     var selectedLanguage by remember { mutableStateOf(MusicLanguage.ALL) }
-    var homeFeed         by remember { mutableStateOf<LanguageHomeFeed?>(null) }
+    var homeFeed         by remember { mutableStateOf(JioSaavnApiClient.getInstantInitialFeed(MusicLanguage.ALL)) }
+    var trendingSongs   by remember { mutableStateOf(homeFeed.trendingSongs) }
+    var isLoading       by remember { mutableStateOf(false) }
     var isFeedLoading    by remember { mutableStateOf(false) }
 
     // â”€â”€ Sheets State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -320,9 +316,14 @@ fun MainPlayerScreen(
         }
     }
 
-    // â”€â”€ Startup: Multi-Language Feed & Restore Cloud Session on Reinstall â”€â”€â”€â”€â”€
     LaunchedEffect(selectedLanguage) {
-        isFeedLoading = true
+        val instant = JioSaavnApiClient.getInstantInitialFeed(selectedLanguage)
+        if (homeFeed.language != selectedLanguage) {
+            homeFeed = instant
+            if (instant.trendingSongs.isNotEmpty()) {
+                trendingSongs = instant.trendingSongs
+            }
+        }
         try {
             val feed = JioSaavnApiClient.getHomeFeedForLanguage(selectedLanguage)
             homeFeed = feed
@@ -330,7 +331,6 @@ fun MainPlayerScreen(
                 trendingSongs = feed.trendingSongs
             }
         } catch (_: Exception) {}
-        isFeedLoading = false
     }
 
     LaunchedEffect(Unit) {
@@ -604,7 +604,14 @@ fun MainPlayerScreen(
                         } else {
                             LanguageFilterChips(
                                 selectedLanguage = selectedLanguage,
-                                onLanguageSelected = { selectedLanguage = it }
+                                onLanguageSelected = { lang ->
+                                    selectedLanguage = lang
+                                    val instant = JioSaavnApiClient.getInstantInitialFeed(lang)
+                                    homeFeed = instant
+                                    if (instant.trendingSongs.isNotEmpty()) {
+                                        trendingSongs = instant.trendingSongs
+                                    }
+                                }
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             PlayAllHeaderRow(
@@ -1158,46 +1165,7 @@ private fun UserProfileSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
 
-            // Samsung One UI Background Optimization Whitelist
-            OutlinedButton(
-                onClick = {
-                    try {
-                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                            data = Uri.parse("package:${context.packageName}")
-                        }
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        try {
-                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                            context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    }
-                },
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, SovereignBlue.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.BatteryChargingFull,
-                        contentDescription = null,
-                        tint = SovereignBlue,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Samsung Background Play Setup",
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 13.sp
-                    )
-                }
-            }
 
             if (showProfileDialog) {
                 var inputName by remember { mutableStateOf(if (user?.isAnonymous == false) (user?.displayName ?: "") else "") }

@@ -33,7 +33,7 @@ class PlaybackService : MediaSessionService() {
     private var wifiLock: WifiManager.WifiLock? = null
 
     companion object {
-        const val CHANNEL_ID = "jsab_music_playback"
+        const val CHANNEL_ID = "jsab_music_playback_v3"
         const val NOTIFICATION_ID = 1001
         var playerControllerInstance: PlayerController? = null
     }
@@ -155,7 +155,7 @@ class PlaybackService : MediaSessionService() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.channel_name),
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = getString(R.string.channel_description)
                 setShowBadge(false)
@@ -207,7 +207,6 @@ class PlaybackService : MediaSessionService() {
         releaseHardwareLocks()
         try {
             mediaSession?.run {
-                player.release()
                 release()
                 mediaSession = null
             }

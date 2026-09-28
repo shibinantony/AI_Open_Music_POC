@@ -39,8 +39,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.0-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.0-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.1-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.1-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -53,26 +53,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v3.0.0
-          name: "JSABMusic v3.0.0 — Background Play, Samsung Lockscreen Widget & Multi-Language Hub"
+          tag_name: v3.0.1
+          name: "JSABMusic v3.0.1 — Instant Launch, ANR Fix & Samsung Lockscreen Widget"
           body: |
-            ### 🎵 JSABMusic v3.0.0 — Enjoy the Beauty of Sovereign Music
-            **Engineered for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
+            ### 🎵 JSABMusic v3.0.1 — Enjoy the Beauty of Sovereign Music
+            **Hardened & Optimized for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
 
-            #### 🚀 What's New in v3.0.0:
-            - ⚡ **Continuous Background Playback (Samsung One UI Hardened):** Upgraded `PlaybackService` to a persistent Foreground Service with `START_STICKY`, CPU and Wi-Fi keep-alive locks, network wake mode, and Samsung battery optimization bypass to prevent Samsung's Smart Manager / Phantom Process Killer from stopping playback.
-            - 📱 **Lock Screen & AOD Music Player Widget:** System Media Controls with `MediaStyle` notification and `MediaSession` token support. Full lock screen playback widget with Play/Pause, Next Track, Previous Track, track metadata, and real-time high-res album artwork.
-            - 🌐 **Multi-Language Explore Hub:** One-tap dynamic language filter chips covering **English**, **Malayalam**, **Tamil**, **Hindi**, **Kannada**, **International**, and **Others**. Features curated Trending Tracks, Top Albums, Popular Artists, and Featured Playlists with instant drill-down streaming!
-            - 🔀 **Shuffle All & Play All Engine:** Instant one-tap "Play All" and "Shuffle All" action buttons on Trending, Liked Music, and Recently Listened feeds.
-            - 🔁 **Repeat Mode Controls:** Toggle between `Repeat Off`, `Repeat All`, and `Repeat One` directly in the Now Playing sheet and player controller.
-            - ☁️ **Full Backward Compatibility:** 100% compatible with existing Firebase Cloud Firestore profiles, liked music, and 7-day history.
-            - 🔍 **Bifurcated Search Engine:** 4-tab parallel search (**Songs**, **Albums**, **Artists**, **Playlists**) with instant drill-down streaming.
+            #### 🚀 What's Fixed & Improved in v3.0.1:
+            - 🛡️ **Zero Startup ANR (Application Not Responding):** Eliminated startup service freeze by decoupling idle service initialization from strict foreground timing rules. AndroidX Media3 manages foreground elevation on audio start with zero watchdog violations.
+            - 📱 **Guaranteed Lock Screen & AOD Widget:** Upgraded notification channel to `IMPORTANCE_DEFAULT` with `VISIBILITY_PUBLIC` and explicit `POST_NOTIFICATIONS` runtime handling. Interactive media controls (Play/Pause, Next Track, Previous Track, Seekbar, and real-time album artwork) display reliably on Samsung One UI and Android 16 lockscreens.
+            - ⚡ **Instant Zero-Latency Launch & Language Hub:** Replaced blocking API calls on app startup and language switching with an instant curated feed (0ms delay) and lightweight parallel background refreshers. Zero blank screens or loading spinners.
+            - 🎧 **Continuous Background Playback:** Protected by CPU WakeLocks, Wi-Fi high-performance locks, and `START_STICKY` service recovery to keep music playing seamlessly even when the screen is turned off.
+            - 🌐 **Multi-Language Explore Hub:** Instant switching across **English**, **Malayalam**, **Tamil**, **Hindi**, **Kannada**, **International**, and **Others**.
+            - 🔍 **Fuzzy & Direct Music Search:** Fast search across Songs, Albums, Artists, and Playlists.
+            - ☁️ **Full Backward Compatibility:** 100% compatible with existing Firebase Cloud Firestore profiles, liked music, and 7-day listening history.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v3.0.0-release.apk`** below, tap to install, and enjoy unconstrained sovereign music!
+            Download **`JSABMusic-v3.0.1-release.apk`** below, tap to install, and enjoy unconstrained sovereign music!
           files: |
-            dist/JSABMusic-v3.0.0-release.apk
-            dist/JSABMusic-v3.0.0-debug.apk
+            dist/JSABMusic-v3.0.1-release.apk
+            dist/JSABMusic-v3.0.1-debug.apk
           draft: false
           prerelease: false
         env:

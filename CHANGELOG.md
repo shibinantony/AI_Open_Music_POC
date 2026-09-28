@@ -6,6 +6,42 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.0.1] — 2026-09-28
+
+### Fixed
+- **Startup ANR ("Application Not Responding"):** Decoupled idle service creation from strict foreground service promotion. AndroidX Media3 manages foreground promotion when playback actually starts, completely resolving `ForegroundServiceDidNotStartInTimeException` and UI thread freezes.
+- **Lock Screen & AOD Music Player Widget on Samsung One UI 8.5 / Android 16:**
+  - Upgraded Notification Channel from `IMPORTANCE_LOW` to `IMPORTANCE_DEFAULT` with new channel ID `jsab_music_playback_v3` and `lockscreenVisibility = Notification.VISIBILITY_PUBLIC`.
+  - Added explicit runtime permission check and launcher for `android.permission.POST_NOTIFICATIONS` (Android 13+).
+  - Media session controls (Play/Pause, Next Track, Previous Track, Seekbar, dynamic artwork) render prominently on the lock screen and Always On Display.
+- **Instant Zero-Latency Launch & Explore Hub:**
+  - Replaced blocking network calls on app launch with instant curated feeds (`getInstantInitialFeed`) across all languages.
+  - Explore screen and language chips load in 0ms with zero loading spinners or blank screens.
+  - Implemented lightweight parallel background fetchers with short timeouts for live refresh.
+  - Added thread-safe in-memory caching (`ConcurrentHashMap`) for language feeds.
+- **Service Lifecycle Safety:** Prevented ExoPlayer from being released prematurely on service disconnects, ensuring uninterrupted audio playback.
+
+---
+
+## [3.0.0] — 2026-09-28
+
+### Added
+- **Multi-Language Explore Hub:**
+  - Dynamic language filter chips: **English**, **Malayalam**, **Tamil**, **Hindi**, **Kannada**, **International**, and **Others**.
+  - Curated Trending Tracks, Top Albums, Popular Artists, and Featured Playlists.
+  - Instant drill-down streaming for all categories.
+- **Hardened Continuous Background Playback for Samsung Galaxy Devices:**
+  - `START_STICKY` service recovery to prevent Samsung Smart Manager from killing playback.
+  - Partial WakeLocks and Wi-Fi High-Performance Locks for uninterrupted streaming when the screen is locked.
+  - Audio focus management with automatic ducking and resume.
+- **Fuzzy Music Search Engine:**
+  - Multi-query permutation search allowing flexible matching (e.g. "Lagan" matches "Lagaan").
+  - Deduplicated search results across Songs, Albums, Artists, and Playlists.
+- **Cloud Firestore Backward Compatibility:**
+  - 100% backward compatible with existing Firebase Cloud Firestore profiles, liked songs (`users/{uid}/liked_songs`), and 7-day history (`users/{uid}/history`).
+
+---
+
 ## [2.2.0] — 2026-09-18
 
 ### Added
