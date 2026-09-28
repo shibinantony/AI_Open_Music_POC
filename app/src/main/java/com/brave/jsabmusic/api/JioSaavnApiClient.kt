@@ -88,6 +88,43 @@ object JioSaavnApiClient {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Search Term Normalizer for Phonetic / Transliteration LIKE Matching
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fun normalizeSearchTerm(text: String): String {
+        return text.lowercase()
+            .replace(Regex("[^a-z0-9]"), "")
+            .replace("aa", "a")
+            .replace("ee", "e")
+            .replace("ii", "i")
+            .replace("oo", "o")
+            .replace("uu", "u")
+            .replace("sh", "s")
+    }
+
+    /**
+     * Resolves complete 320 kbps stream details for an array of song IDs.
+     */
+    suspend fun getSongsByIds(ids: List<String>): List<SongItem> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<SongItem>()
+        if (ids.isEmpty()) return@withContext songs
+        try {
+            val chunk = ids.take(20).joinToString(",")
+            val url = "$BASE_URL?__call=song.getDetails&pids=$chunk&_format=json&_marker=0&api_version=4"
+            val body = getJson(url) ?: return@withContext songs
+            val json = JSONObject(body)
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val obj = json.optJSONObject(key) ?: continue
+                val song = parseSongJson(obj)
+                if (song != null) songs.add(song)
+            }
+        } catch (_: Exception) {}
+        songs
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Parallel search — all four categories at once
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -95,11 +132,12 @@ object JioSaavnApiClient {
      * Fires all four search endpoints in parallel and returns an aggregate [SearchResults].
      */
     suspend fun searchAll(query: String): SearchResults = coroutineScope {
-        if (query.trim().isEmpty()) return@coroutineScope SearchResults()
-        val songsDeferred     = async { searchSongs(query) }
-        val albumsDeferred    = async { searchAlbums(query) }
-        val artistsDeferred   = async { searchArtists(query) }
-        val playlistsDeferred = async { searchPlaylists(query) }
+        val clean = query.trim()
+        if (clean.isEmpty()) return@coroutineScope SearchResults()
+        val songsDeferred     = async { searchSongs(clean) }
+        val albumsDeferred    = async { searchAlbums(clean) }
+        val artistsDeferred   = async { searchArtists(clean) }
+        val playlistsDeferred = async { searchPlaylists(clean) }
         SearchResults(
             songs     = songsDeferred.await(),
             albums    = albumsDeferred.await(),
@@ -109,83 +147,278 @@ object JioSaavnApiClient {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Per-category search
+    // Per-category search with Multi-Pass LIKE & Autocomplete Engine
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Searches JioSaavn for tracks matching the query and resolves 320 kbps stream links.
+     * Searches JioSaavn for tracks matching the query using a multi-pass LIKE / Fuzzy matching engine.
+     * Incorporates primary song search, autocomplete predictions, related album tracks,
+     * and transliteration normalization so partials like "Lagan" match "Lagaan".
      */
     suspend fun searchSongs(query: String): List<SongItem> = withContext(Dispatchers.IO) {
-        val songs = mutableListOf<SongItem>()
-        if (query.trim().isEmpty()) return@withContext songs
+        val clean = query.trim()
+        if (clean.isEmpty()) return@withContext emptyList()
+        val songsMap = LinkedHashMap<String, SongItem>()
+        val normQuery = normalizeSearchTerm(clean)
+
+        // Pass 1: Primary JioSaavn song search
         try {
-            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-            val url = "$BASE_URL?__call=search.getResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=25"
-            val body = getJson(url) ?: return@withContext songs
-            val results = JSONObject(body).optJSONArray("results") ?: return@withContext songs
-            for (i in 0 until results.length()) {
-                val song = parseSongJson(results.optJSONObject(i) ?: continue)
-                if (song != null) songs.add(song)
+            val encodedQuery = URLEncoder.encode(clean, "UTF-8")
+            val url = "$BASE_URL?__call=search.getResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=30"
+            val body = getJson(url)
+            if (body != null) {
+                val results = JSONObject(body).optJSONArray("results")
+                if (results != null) {
+                    for (i in 0 until results.length()) {
+                        val song = parseSongJson(results.optJSONObject(i) ?: continue)
+                        if (song != null) songsMap[song.id] = song
+                    }
+                }
             }
         } catch (_: Exception) {}
-        songs
+
+        // Pass 2: Autocomplete suggestions & related album drill-down
+        try {
+            val encodedQuery = URLEncoder.encode(clean, "UTF-8")
+            val autoUrl = "$BASE_URL?__call=autocomplete.get&query=$encodedQuery&_format=json&_marker=0&api_version=4"
+            val body = getJson(autoUrl)
+            if (body != null) {
+                val json = JSONObject(body)
+                val pidsToFetch = mutableListOf<String>()
+
+                val topquery = json.optJSONObject("topquery")?.optJSONArray("data")
+                if (topquery != null) {
+                    for (i in 0 until topquery.length()) {
+                        val item = topquery.optJSONObject(i) ?: continue
+                        val id = item.optString("id")
+                        if (id.isNotEmpty() && !songsMap.containsKey(id)) pidsToFetch.add(id)
+                    }
+                }
+
+                val autoSongs = json.optJSONObject("songs")?.optJSONArray("data")
+                if (autoSongs != null) {
+                    for (i in 0 until autoSongs.length()) {
+                        val item = autoSongs.optJSONObject(i) ?: continue
+                        val id = item.optString("id")
+                        if (id.isNotEmpty() && !songsMap.containsKey(id)) pidsToFetch.add(id)
+                    }
+                }
+
+                if (pidsToFetch.isNotEmpty()) {
+                    val resolved = getSongsByIds(pidsToFetch)
+                    for (s in resolved) songsMap[s.id] = s
+                }
+
+                // If autocomplete returns albums matching the query (e.g. "Lagaan" when typing "lagan"),
+                // pull the tracks from that album!
+                val autoAlbums = json.optJSONObject("albums")?.optJSONArray("data")
+                if (autoAlbums != null && autoAlbums.length() > 0) {
+                    for (i in 0 until minOf(2, autoAlbums.length())) {
+                        val albObj = autoAlbums.optJSONObject(i) ?: continue
+                        val albTitle = albObj.optString("title")
+                        val albId = albObj.optString("id")
+                        if (albId.isNotEmpty()) {
+                            val normAlb = normalizeSearchTerm(albTitle)
+                            if (normAlb.contains(normQuery) || normQuery.contains(normAlb) || albTitle.contains(clean, ignoreCase = true)) {
+                                val albumSongs = getAlbumSongs(albId)
+                                for (s in albumSongs) {
+                                    if (!songsMap.containsKey(s.id)) songsMap[s.id] = s
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        // Pass 3: If still fewer than 5 songs, search albums directly and extract album tracks
+        if (songsMap.size < 5) {
+            try {
+                val albums = searchAlbums(clean)
+                for (alb in albums.take(2)) {
+                    val normAlb = normalizeSearchTerm(alb.name)
+                    if (normAlb.contains(normQuery) || normQuery.contains(normAlb) || alb.name.contains(clean, ignoreCase = true)) {
+                        val albumSongs = getAlbumSongs(alb.id)
+                        for (s in albumSongs) {
+                            if (!songsMap.containsKey(s.id)) songsMap[s.id] = s
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Rank by LIKE match score
+        songsMap.values.sortedByDescending { song ->
+            val normTitle = normalizeSearchTerm(song.title)
+            val normAlbum = normalizeSearchTerm(song.album)
+            val normArtist = normalizeSearchTerm(song.artist)
+            when {
+                normTitle == normQuery -> 100
+                normTitle.startsWith(normQuery) -> 85
+                normTitle.contains(normQuery) || song.title.contains(clean, ignoreCase = true) -> 70
+                normAlbum.contains(normQuery) || song.album.contains(clean, ignoreCase = true) -> 60
+                normArtist.contains(normQuery) || song.artist.contains(clean, ignoreCase = true) -> 45
+                else -> 10
+            }
+        }
     }
 
     /**
-     * Searches JioSaavn for albums matching the query.
+     * Searches JioSaavn for albums matching the query with LIKE & autocomplete matching.
      */
     suspend fun searchAlbums(query: String): List<AlbumItem> = withContext(Dispatchers.IO) {
-        val albums = mutableListOf<AlbumItem>()
-        if (query.trim().isEmpty()) return@withContext albums
+        val clean = query.trim()
+        if (clean.isEmpty()) return@withContext emptyList()
+        val albumMap = LinkedHashMap<String, AlbumItem>()
+        val normQuery = normalizeSearchTerm(clean)
+
         try {
-            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-            val url = "$BASE_URL?__call=search.getAlbumResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=15"
-            val body = getJson(url) ?: return@withContext albums
-            val results = JSONObject(body).optJSONArray("results") ?: return@withContext albums
-            for (i in 0 until results.length()) {
-                val album = parseAlbumJson(results.optJSONObject(i) ?: continue)
-                if (album != null) albums.add(album)
+            val encodedQuery = URLEncoder.encode(clean, "UTF-8")
+            val url = "$BASE_URL?__call=search.getAlbumResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=20"
+            val body = getJson(url)
+            if (body != null) {
+                val results = JSONObject(body).optJSONArray("results")
+                if (results != null) {
+                    for (i in 0 until results.length()) {
+                        val album = parseAlbumJson(results.optJSONObject(i) ?: continue)
+                        if (album != null) albumMap[album.id] = album
+                    }
+                }
             }
         } catch (_: Exception) {}
-        albums
+
+        try {
+            val encodedQuery = URLEncoder.encode(clean, "UTF-8")
+            val autoUrl = "$BASE_URL?__call=autocomplete.get&query=$encodedQuery&_format=json&_marker=0&api_version=4"
+            val body = getJson(autoUrl)
+            if (body != null) {
+                val albums = JSONObject(body).optJSONObject("albums")?.optJSONArray("data")
+                if (albums != null) {
+                    for (i in 0 until albums.length()) {
+                        val album = parseAlbumJson(albums.optJSONObject(i) ?: continue)
+                        if (album != null && !albumMap.containsKey(album.id)) {
+                            albumMap[album.id] = album
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        albumMap.values.sortedByDescending { album ->
+            val normName = normalizeSearchTerm(album.name)
+            val normArtist = normalizeSearchTerm(album.artist)
+            when {
+                normName == normQuery -> 100
+                normName.startsWith(normQuery) -> 85
+                normName.contains(normQuery) || album.name.contains(clean, ignoreCase = true) -> 70
+                normArtist.contains(normQuery) || album.artist.contains(clean, ignoreCase = true) -> 50
+                else -> 10
+            }
+        }
     }
 
     /**
-     * Searches JioSaavn for artists matching the query.
+     * Searches JioSaavn for artists matching the query with LIKE & autocomplete matching.
      */
     suspend fun searchArtists(query: String): List<ArtistItem> = withContext(Dispatchers.IO) {
-        val artists = mutableListOf<ArtistItem>()
-        if (query.trim().isEmpty()) return@withContext artists
+        val clean = query.trim()
+        if (clean.isEmpty()) return@withContext emptyList()
+        val artistMap = LinkedHashMap<String, ArtistItem>()
+        val normQuery = normalizeSearchTerm(clean)
+
         try {
-            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
-            val url = "$BASE_URL?__call=search.getArtistResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=10"
-            val body = getJson(url) ?: return@withContext artists
-            val results = JSONObject(body).optJSONArray("results") ?: return@withContext artists
-            for (i in 0 until results.length()) {
-                val artist = parseArtistJson(results.optJSONObject(i) ?: continue)
-                if (artist != null) artists.add(artist)
+            val encodedQuery = URLEncoder.encode(clean, "UTF-8")
+            val url = "$BASE_URL?__call=search.getArtistResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=15"
+            val body = getJson(url)
+            if (body != null) {
+                val results = JSONObject(body).optJSONArray("results")
+                if (results != null) {
+                    for (i in 0 until results.length()) {
+                        val artist = parseArtistJson(results.optJSONObject(i) ?: continue)
+                        if (artist != null) artistMap[artist.id] = artist
+                    }
+                }
             }
         } catch (_: Exception) {}
-        artists
+
+        try {
+            val encodedQuery = URLEncoder.encode(clean, "UTF-8")
+            val autoUrl = "$BASE_URL?__call=autocomplete.get&query=$encodedQuery&_format=json&_marker=0&api_version=4"
+            val body = getJson(autoUrl)
+            if (body != null) {
+                val artists = JSONObject(body).optJSONObject("artists")?.optJSONArray("data")
+                if (artists != null) {
+                    for (i in 0 until artists.length()) {
+                        val artist = parseArtistJson(artists.optJSONObject(i) ?: continue)
+                        if (artist != null && !artistMap.containsKey(artist.id)) {
+                            artistMap[artist.id] = artist
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        artistMap.values.sortedByDescending { artist ->
+            val normName = normalizeSearchTerm(artist.name)
+            when {
+                normName == normQuery -> 100
+                normName.startsWith(normQuery) -> 85
+                normName.contains(normQuery) || artist.name.contains(clean, ignoreCase = true) -> 70
+                else -> 10
+            }
+        }
     }
 
     /**
-     * Searches JioSaavn for playlists matching the query.
+     * Searches JioSaavn for playlists matching the query with LIKE & autocomplete matching.
      */
     suspend fun searchPlaylists(query: String): List<PlaylistItem> = withContext(Dispatchers.IO) {
-        val playlists = mutableListOf<PlaylistItem>()
-        if (query.trim().isEmpty()) return@withContext playlists
+        val clean = query.trim()
+        if (clean.isEmpty()) return@withContext emptyList()
+        val playlistMap = LinkedHashMap<String, PlaylistItem>()
+        val normQuery = normalizeSearchTerm(clean)
+
         try {
-            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
+            val encodedQuery = URLEncoder.encode(clean, "UTF-8")
             val url = "$BASE_URL?__call=search.getPlaylistResults&q=$encodedQuery&_format=json&_marker=0&api_version=4&p=1&n=15"
-            val body = getJson(url) ?: return@withContext playlists
-            val results = JSONObject(body).optJSONArray("results") ?: return@withContext playlists
-            for (i in 0 until results.length()) {
-                val playlist = parsePlaylistJson(results.optJSONObject(i) ?: continue)
-                if (playlist != null) playlists.add(playlist)
+            val body = getJson(url)
+            if (body != null) {
+                val results = JSONObject(body).optJSONArray("results")
+                if (results != null) {
+                    for (i in 0 until results.length()) {
+                        val playlist = parsePlaylistJson(results.optJSONObject(i) ?: continue)
+                        if (playlist != null) playlistMap[playlist.id] = playlist
+                    }
+                }
             }
         } catch (_: Exception) {}
-        playlists
+
+        try {
+            val encodedQuery = URLEncoder.encode(clean, "UTF-8")
+            val autoUrl = "$BASE_URL?__call=autocomplete.get&query=$encodedQuery&_format=json&_marker=0&api_version=4"
+            val body = getJson(autoUrl)
+            if (body != null) {
+                val playlists = JSONObject(body).optJSONObject("playlists")?.optJSONArray("data")
+                if (playlists != null) {
+                    for (i in 0 until playlists.length()) {
+                        val playlist = parsePlaylistJson(playlists.optJSONObject(i) ?: continue)
+                        if (playlist != null && !playlistMap.containsKey(playlist.id)) {
+                            playlistMap[playlist.id] = playlist
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        playlistMap.values.sortedByDescending { playlist ->
+            val normName = normalizeSearchTerm(playlist.name)
+            when {
+                normName == normQuery -> 100
+                normName.startsWith(normQuery) -> 85
+                normName.contains(normQuery) || playlist.name.contains(clean, ignoreCase = true) -> 70
+                else -> 10
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

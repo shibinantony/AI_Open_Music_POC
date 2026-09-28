@@ -127,6 +127,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -331,6 +333,7 @@ fun MainPlayerScreen(
         isFeedLoading = false
     }
 
+    LaunchedEffect(Unit) {
         // Restore cloud session if app was reinstalled or fresh launched
         try {
             if (playerController.currentSong.value == null) {
@@ -344,22 +347,32 @@ fun MainPlayerScreen(
     }
 
     // â”€â”€ Search trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    var searchJob by remember { mutableStateOf<Job?>(null) }
+
     fun triggerSearch(query: String) {
-        if (query.length < 2) {
-            songResults = emptyList(); albumResults = emptyList()
-            artistResults = emptyList(); playlistResults = emptyList()
+        searchJob?.cancel()
+        val cleanQuery = query.trim()
+        if (cleanQuery.length < 2) {
+            songResults = emptyList()
+            albumResults = emptyList()
+            artistResults = emptyList()
+            playlistResults = emptyList()
+            isLoading = false
             return
         }
-        scope.launch {
+        searchJob = scope.launch {
+            delay(280) // Debounce keystrokes to prevent race conditions & rate limiting
             isLoading = true
             try {
-                val results = JioSaavnApiClient.searchAll(query)
+                val results = JioSaavnApiClient.searchAll(cleanQuery)
                 songResults     = results.songs
                 albumResults    = results.albums
                 artistResults   = results.artists
                 playlistResults = results.playlists
-            } catch (_: Exception) {}
-            isLoading = false
+            } catch (_: Exception) {
+            } finally {
+                isLoading = false
+            }
         }
     }
 
