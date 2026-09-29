@@ -650,7 +650,7 @@ fun MainPlayerScreen(
                                     onAlbumClick = { album ->
                                         scope.launch {
                                             isLoading = true
-                                            val songs = JioSaavnApiClient.getAlbumSongs(album.id)
+                                            val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name)
                                             isLoading = false
                                             if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
                                         }
@@ -662,7 +662,7 @@ fun MainPlayerScreen(
                                     onArtistClick = { artist ->
                                         scope.launch {
                                             isLoading = true
-                                            val songs = JioSaavnApiClient.getArtistSongs(artist.id)
+                                            val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name)
                                             isLoading = false
                                             if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
                                         }
@@ -674,7 +674,7 @@ fun MainPlayerScreen(
                                     onPlaylistClick = { playlist ->
                                         scope.launch {
                                             isLoading = true
-                                            val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id)
+                                            val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name)
                                             isLoading = false
                                             if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
                                         }
@@ -694,7 +694,7 @@ fun MainPlayerScreen(
                                 onAlbumClick = { album ->
                                     scope.launch {
                                         isLoading = true
-                                        val songs = JioSaavnApiClient.getAlbumSongs(album.id)
+                                        val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name)
                                         isLoading = false
                                         if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
                                     }
@@ -702,7 +702,7 @@ fun MainPlayerScreen(
                                 onArtistClick = { artist ->
                                     scope.launch {
                                         isLoading = true
-                                        val songs = JioSaavnApiClient.getArtistSongs(artist.id)
+                                        val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name)
                                         isLoading = false
                                         if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
                                     }
@@ -710,7 +710,7 @@ fun MainPlayerScreen(
                                 onPlaylistClick = { playlist ->
                                     scope.launch {
                                         isLoading = true
-                                        val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id)
+                                        val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name)
                                         isLoading = false
                                         if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
                                     }

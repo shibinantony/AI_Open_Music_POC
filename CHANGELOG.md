@@ -6,6 +6,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.0.2] — 2026-09-29
+
+### Fixed
+- **Artist Top Songs Now Play (Search & Trending):** `getArtistSongs()` now uses the artist's display name as a fallback when the JioSaavn ID returns no results. Searching "A R Rahman" and tapping the artist card now correctly plays his songs.
+- **Trending/Explore Albums & Playlists Now Play:** `getAlbumSongs()` and `getPlaylistSongs()` now detect placeholder IDs (curated cards) and fall back to name-based search queries. All trending cards across Malayalam, Tamil, Hindi, and all other language tabs are now fully playable.
+- **Lock Screen Widget (Samsung One UI):** Changed notification channel from `IMPORTANCE_DEFAULT` to `IMPORTANCE_HIGH` and bumped channel ID to `jsab_music_playback_v4`. Android requires a new channel ID when changing importance; this ensures Samsung One UI shows the media player controls on the lock screen.
+
+### Removed (Code Cleanup)
+- `adblock/AdBlockEngine.kt` — dead code, never used by any active component.
+- `bridge/PlaybackStateData.kt`, `bridge/WebInterfaceBridge.kt` — legacy WebView bridge files, not connected to the Compose UI.
+- `storage/LocalMusicStore.kt` — offline cache stub, not wired to any active feature.
+- `util/CookieSyncManager.kt`, `util/UserAgentManager.kt` — WebView utilities from a previous architecture.
+- `ui/BackgroundWebView.kt` — standalone WebView component, replaced entirely by native Compose.
+
+---
+
 ## [3.0.1] — 2026-09-28
 
 ### Fixed

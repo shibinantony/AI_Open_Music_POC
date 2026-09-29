@@ -589,55 +589,97 @@ object JioSaavnApiClient {
 
     /**
      * Fetches all songs for a given album ID.
+     * Falls back to album name search if the ID is a placeholder.
      */
-    suspend fun getAlbumSongs(albumId: String): List<SongItem> = withContext(Dispatchers.IO) {
+    suspend fun getAlbumSongs(albumId: String, albumName: String = ""): List<SongItem> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<SongItem>()
-        try {
-            val url = "$BASE_URL?__call=content.getAlbumDetails&albumid=$albumId&_format=json&_marker=0&api_version=4"
-            val body = getJson(url) ?: return@withContext songs
-            val json = JSONObject(body)
-            val list = json.optJSONArray("list") ?: json.optJSONArray("songs") ?: return@withContext songs
-            for (i in 0 until list.length()) {
-                val s = parseSongJson(list.optJSONObject(i) ?: continue)
-                if (s != null) songs.add(s)
-            }
-        } catch (_: Exception) {}
+        // Try ID-based fetch if ID looks real (no underscores — real JioSaavn IDs are numeric strings)
+        if (albumId.isNotEmpty() && !albumId.contains("_")) {
+            try {
+                val url = "$BASE_URL?__call=content.getAlbumDetails&albumid=$albumId&_format=json&_marker=0&api_version=4"
+                val body = getJson(url)
+                if (body != null) {
+                    val json = JSONObject(body)
+                    val list = json.optJSONArray("list") ?: json.optJSONArray("songs")
+                    if (list != null) {
+                        for (i in 0 until list.length()) {
+                            val s = parseSongJson(list.optJSONObject(i) ?: continue)
+                            if (s != null) songs.add(s)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        // Fallback: search by album name
+        if (songs.isEmpty() && albumName.isNotEmpty()) {
+            try {
+                songs.addAll(searchSongs(albumName))
+            } catch (_: Exception) {}
+        }
         songs
     }
 
     /**
      * Fetches top songs for a given artist ID.
+     * Falls back to name-based search if the artist ID returns no results
+     * (handles curated cards with placeholder IDs).
      */
-    suspend fun getArtistSongs(artistId: String): List<SongItem> = withContext(Dispatchers.IO) {
+    suspend fun getArtistSongs(artistId: String, artistName: String = ""): List<SongItem> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<SongItem>()
-        try {
-            val url = "$BASE_URL?__call=artist.getArtistPageDetails&artistId=$artistId&_format=json&_marker=0&api_version=4&n_song=30"
-            val body = getJson(url) ?: return@withContext songs
-            val json = JSONObject(body)
-            val list = json.optJSONArray("topSongs") ?: json.optJSONArray("songs") ?: return@withContext songs
-            for (i in 0 until list.length()) {
-                val s = parseSongJson(list.optJSONObject(i) ?: continue)
-                if (s != null) songs.add(s)
-            }
-        } catch (_: Exception) {}
+        // Try ID-based fetch first
+        if (artistId.isNotEmpty() && !artistId.contains("_")) {
+            try {
+                val url = "$BASE_URL?__call=artist.getArtistPageDetails&artistId=$artistId&_format=json&_marker=0&api_version=4&n_song=30"
+                val body = getJson(url)
+                if (body != null) {
+                    val json = JSONObject(body)
+                    val list = json.optJSONArray("topSongs") ?: json.optJSONArray("songs")
+                    if (list != null) {
+                        for (i in 0 until list.length()) {
+                            val s = parseSongJson(list.optJSONObject(i) ?: continue)
+                            if (s != null) songs.add(s)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        // Fallback: search by artist name so curated cards with fake IDs still work
+        if (songs.isEmpty() && artistName.isNotEmpty()) {
+            try {
+                songs.addAll(searchSongs(artistName))
+            } catch (_: Exception) {}
+        }
         songs
     }
 
     /**
      * Fetches all songs inside a JioSaavn playlist.
+     * Falls back to playlist name search if the ID is a placeholder.
      */
-    suspend fun getPlaylistSongs(playlistId: String): List<SongItem> = withContext(Dispatchers.IO) {
+    suspend fun getPlaylistSongs(playlistId: String, playlistName: String = ""): List<SongItem> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<SongItem>()
-        try {
-            val url = "$BASE_URL?__call=playlist.getDetails&listid=$playlistId&_format=json&_marker=0&api_version=4"
-            val body = getJson(url) ?: return@withContext songs
-            val json = JSONObject(body)
-            val list = json.optJSONArray("list") ?: json.optJSONArray("songs") ?: return@withContext songs
-            for (i in 0 until list.length()) {
-                val s = parseSongJson(list.optJSONObject(i) ?: continue)
-                if (s != null) songs.add(s)
-            }
-        } catch (_: Exception) {}
+        if (playlistId.isNotEmpty() && !playlistId.contains("_")) {
+            try {
+                val url = "$BASE_URL?__call=playlist.getDetails&listid=$playlistId&_format=json&_marker=0&api_version=4"
+                val body = getJson(url)
+                if (body != null) {
+                    val json = JSONObject(body)
+                    val list = json.optJSONArray("list") ?: json.optJSONArray("songs")
+                    if (list != null) {
+                        for (i in 0 until list.length()) {
+                            val s = parseSongJson(list.optJSONObject(i) ?: continue)
+                            if (s != null) songs.add(s)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        // Fallback: search by playlist name
+        if (songs.isEmpty() && playlistName.isNotEmpty()) {
+            try {
+                songs.addAll(searchSongs(playlistName))
+            } catch (_: Exception) {}
+        }
         songs
     }
 

@@ -33,7 +33,7 @@ class PlaybackService : MediaSessionService() {
     private var wifiLock: WifiManager.WifiLock? = null
 
     companion object {
-        const val CHANNEL_ID = "jsab_music_playback_v3"
+        const val CHANNEL_ID = "jsab_music_playback_v4"
         const val NOTIFICATION_ID = 1001
         var playerControllerInstance: PlayerController? = null
     }
@@ -155,11 +155,12 @@ class PlaybackService : MediaSessionService() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH   // HIGH required on Samsung One UI for lock screen widget
             ).apply {
                 description = getString(R.string.channel_description)
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setBypassDnd(false)  // Don't bypass DnD to respect user preference
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)

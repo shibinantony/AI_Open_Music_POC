@@ -39,8 +39,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.1-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.1-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.2-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v3.0.2-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -53,26 +53,25 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v3.0.1
-          name: "JSABMusic v3.0.1 — Instant Launch, ANR Fix & Samsung Lockscreen Widget"
+          tag_name: v3.0.2
+          name: "JSABMusic v3.0.2 — Artist & Trending Playback Fixes, Lock Screen Widget, Code Cleanup"
           body: |
-            ### 🎵 JSABMusic v3.0.1 — Enjoy the Beauty of Sovereign Music
-            **Hardened & Optimized for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
+            ### 🎵 JSABMusic v3.0.2 — Everything Plays, Everything Works
 
-            #### 🚀 What's Fixed & Improved in v3.0.1:
-            - 🛡️ **Zero Startup ANR (Application Not Responding):** Eliminated startup service freeze by decoupling idle service initialization from strict foreground timing rules. AndroidX Media3 manages foreground elevation on audio start with zero watchdog violations.
-            - 📱 **Guaranteed Lock Screen & AOD Widget:** Upgraded notification channel to `IMPORTANCE_DEFAULT` with `VISIBILITY_PUBLIC` and explicit `POST_NOTIFICATIONS` runtime handling. Interactive media controls (Play/Pause, Next Track, Previous Track, Seekbar, and real-time album artwork) display reliably on Samsung One UI and Android 16 lockscreens.
-            - ⚡ **Instant Zero-Latency Launch & Language Hub:** Replaced blocking API calls on app startup and language switching with an instant curated feed (0ms delay) and lightweight parallel background refreshers. Zero blank screens or loading spinners.
-            - 🎧 **Continuous Background Playback:** Protected by CPU WakeLocks, Wi-Fi high-performance locks, and `START_STICKY` service recovery to keep music playing seamlessly even when the screen is turned off.
-            - 🌐 **Multi-Language Explore Hub:** Instant switching across **English**, **Malayalam**, **Tamil**, **Hindi**, **Kannada**, **International**, and **Others**.
-            - 🔍 **Fuzzy & Direct Music Search:** Fast search across Songs, Albums, Artists, and Playlists.
-            - ☁️ **Full Backward Compatibility:** 100% compatible with existing Firebase Cloud Firestore profiles, liked music, and 7-day listening history.
+            **Targeted for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
+
+            #### 🔧 Bug Fixes in v3.0.2:
+            - 🎤 **Artist Top Songs Now Play:** Tapping any artist (from Search or Trending) now correctly resolves and plays their songs. Added automatic name-based fallback when artist IDs are unresolvable.
+            - 🎵 **Trending Albums & Playlists Now Play:** Every trending card (Songs, Albums, Artists, Playlists) across all language tabs is now fully functional. No more "nothing happens" on tap.
+            - 📱 **Lock Screen Widget Fixed:** Upgraded notification channel to `IMPORTANCE_HIGH` (required by Samsung One UI) and refreshed channel ID so the new setting takes effect. Play/Pause/Next/Prev controls now appear on the lock screen.
+            - 🧹 **Major Code Cleanup (−6 source files):** Removed dead/unused `AdBlockEngine`, `WebInterfaceBridge`, `PlaybackStateData`, `LocalMusicStore`, `CookieSyncManager`, `UserAgentManager`, and `BackgroundWebView` files that were never referenced by the active app. Leaner binary, simpler codebase.
+            - 📦 **100% Backward Compatible:** Firebase Firestore, liked songs, and session history are fully preserved.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v3.0.1-release.apk`** below, tap to install, and enjoy unconstrained sovereign music!
+            Download **`JSABMusic-v3.0.2-release.apk`** below and install directly.
           files: |
-            dist/JSABMusic-v3.0.1-release.apk
-            dist/JSABMusic-v3.0.1-debug.apk
+            dist/JSABMusic-v3.0.2-release.apk
+            dist/JSABMusic-v3.0.2-debug.apk
           draft: false
           prerelease: false
         env:
