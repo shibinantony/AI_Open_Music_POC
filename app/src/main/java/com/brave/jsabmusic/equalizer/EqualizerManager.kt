@@ -2,21 +2,18 @@ package com.brave.jsabmusic.equalizer
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.brave.jsabmusic.bridge.WebInterfaceBridge
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Manages 5-band equalizer gains, bass boost, and preamp attenuation.
- * Automatically synchronizes changes to WebAudio DSP via WebInterfaceBridge.
+ * State is persisted locally via SharedPreferences and applied through HardwareEqualizerManager.
  */
 class EqualizerManager(private val context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("jsab_equalizer_prefs", Context.MODE_PRIVATE)
-
-    private var bridge: WebInterfaceBridge? = null
 
     private val _bandGains = MutableStateFlow(FloatArray(5) { 0f })
     val bandGains: StateFlow<FloatArray> = _bandGains.asStateFlow()
@@ -34,11 +31,6 @@ class EqualizerManager(private val context: Context) {
         loadPersistedState()
     }
 
-    fun setBridge(bridge: WebInterfaceBridge) {
-        this.bridge = bridge
-        applyToWebAudio()
-    }
-
     fun setBandGain(bandIndex: Int, gainDb: Float) {
         if (bandIndex in 0..4) {
             val clamped = gainDb.coerceIn(-12f, 12f)
@@ -47,22 +39,17 @@ class EqualizerManager(private val context: Context) {
             _bandGains.value = updated
             _currentPreset.value = "Custom"
             saveState()
-            applyToWebAudio()
         }
     }
 
     fun setBassBoost(gainDb: Float) {
-        val clamped = gainDb.coerceIn(0f, 10f)
-        _bassBoost.value = clamped
+        _bassBoost.value = gainDb.coerceIn(0f, 10f)
         saveState()
-        applyToWebAudio()
     }
 
     fun setPreampGain(gainMultiplier: Float) {
-        val clamped = gainMultiplier.coerceIn(0.5f, 1.5f)
-        _preampGain.value = clamped
+        _preampGain.value = gainMultiplier.coerceIn(0.5f, 1.5f)
         saveState()
-        applyToWebAudio()
     }
 
     fun applyPreset(presetName: String) {
@@ -71,11 +58,6 @@ class EqualizerManager(private val context: Context) {
         _bassBoost.value = preset.bassBoost
         _currentPreset.value = preset.name
         saveState()
-        applyToWebAudio()
-    }
-
-    private fun applyToWebAudio() {
-        bridge?.setEqualizer(_bandGains.value, _bassBoost.value, _preampGain.value)
     }
 
     private fun saveState() {
