@@ -66,6 +66,7 @@ class FirebaseSyncManager(private val context: Context) {
 
     private var likedListener: ListenerRegistration? = null
     private var historyListener: ListenerRegistration? = null
+    private var dislikedListener: ListenerRegistration? = null
 
     init {
         initLocalSession()
@@ -206,6 +207,27 @@ class FirebaseSyncManager(private val context: Context) {
         }
         saveDislikedIds(current)
         _dislikedIds.value = current
+
+        val uid = _currentUser.value?.uid ?: return
+        val db = firestore ?: return
+        scope.launch {
+            try {
+                val docRef = db.collection("users").document(uid).collection("disliked_songs").document(song.id)
+                if (current.contains(song.id)) {
+                    val dislikeMap = hashMapOf(
+                        "dislikedId" to song.id,
+                        "title" to song.title,
+                        "artist" to song.artist,
+                        "dislikedAt" to System.currentTimeMillis()
+                    )
+                    docRef.set(dislikeMap).await()
+                } else {
+                    docRef.delete().await()
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "Error updating disliked status in Firestore", e)
+            }
+        }
     }
 
     private fun getRecentlyListened(): List<SongItem> {
@@ -389,6 +411,10 @@ class FirebaseSyncManager(private val context: Context) {
                     db.collection("users").document(uid).collection("history").document(song.id)
                         .set(songToMap(song).apply { put("playedAt", System.currentTimeMillis()) })
                 }
+                for (dislikedId in getDislikedIds()) {
+                    db.collection("users").document(uid).collection("disliked_songs").document(dislikedId)
+                        .set(hashMapOf("dislikedId" to dislikedId, "dislikedAt" to System.currentTimeMillis()))
+                }
             } catch (e: Exception) {
                 Log.e(tag, "Error syncing data to cloud: ${e.message}")
             }
@@ -427,6 +453,20 @@ class FirebaseSyncManager(private val context: Context) {
                     }
                 }
         } catch (e: Exception) { Log.e(tag, "Failed to attach history listener", e) }
+
+        dislikedListener?.remove()
+        try {
+            dislikedListener = db.collection("users").document(uid).collection("disliked_songs")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) { Log.e(tag, "Disliked songs listener error: ${error.message}"); return@addSnapshotListener }
+                    val remoteDisliked = snapshot?.documents?.mapNotNull { it.id }?.toSet() ?: emptySet()
+                    if (remoteDisliked.isNotEmpty()) {
+                        val merged = (_dislikedIds.value + remoteDisliked).toSet()
+                        saveDislikedIds(merged)
+                        _dislikedIds.value = merged
+                    }
+                }
+        } catch (e: Exception) { Log.e(tag, "Failed to attach disliked songs listener", e) }
     }
 
     fun signInWithProfile(displayName: String, email: String, photoUrl: String? = null) {

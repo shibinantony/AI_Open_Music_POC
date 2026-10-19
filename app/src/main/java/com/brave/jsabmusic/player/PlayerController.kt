@@ -244,21 +244,26 @@ class PlayerController(private val context: Context) {
         val newQueue = currentQ.filter { it.id != songId }
         _queue.value = newQueue
 
-        if (_currentSong.value?.id == songId) {
+        val wasCurrent = _currentSong.value?.id == songId
+
+        for (i in 0 until exoPlayer.mediaItemCount) {
+            if (exoPlayer.getMediaItemAt(i).mediaId == songId) {
+                exoPlayer.removeMediaItem(i)
+                break
+            }
+        }
+
+        if (wasCurrent) {
             if (newQueue.isNotEmpty()) {
-                skipNext()
+                if (exoPlayer.currentMediaItem == null || exoPlayer.playbackState == Player.STATE_ENDED) {
+                    exoPlayer.seekToDefaultPosition(0)
+                    exoPlayer.play()
+                }
             } else {
                 exoPlayer.stop()
                 exoPlayer.clearMediaItems()
                 _currentSong.value = null
                 _isPlaying.value = false
-            }
-        } else {
-            for (i in 0 until exoPlayer.mediaItemCount) {
-                if (exoPlayer.getMediaItemAt(i).mediaId == songId) {
-                    exoPlayer.removeMediaItem(i)
-                    break
-                }
             }
         }
     }

@@ -6,6 +6,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.1.1] — 2026-10-19
+
+### Enhanced
+- **ExoPlayer Dislike Eviction:** Hardened `removeSongFromQueue` to unconditionally remove the media item from ExoPlayer's underlying timeline, guaranteeing that a disliked song is completely purged even if it was currently being played when the button was tapped.
+- **Firebase Firestore Dislike Synchronization:** Disliked songs are now automatically backed up to Cloud Firestore (`users/{uid}/disliked_songs/{songId}`) with real-time snapshot synchronization, ensuring personal blacklist preferences persist across devices and re-installations.
+- **Defensive Dislike Filtering in SongList:** Added an internal secondary filter to `SongList` so that disliked tracks are purged at the UI component level before composing.
+
+---
+
 ## [3.1.0] — 2026-10-19
 
 ### Added

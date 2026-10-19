@@ -1396,17 +1396,21 @@ private fun SongList(
     onSongClick: (SongItem) -> Unit,
     onRadioPlay: ((SongItem) -> Unit)? = null
 ) {
-    if (songs.isEmpty()) {
+    val likedIds = remember(likedSongs) { likedSongs.map { it.id }.toSet() }
+    val visibleSongs = remember(songs, dislikedIds) {
+        songs.filter { it.id !in dislikedIds }
+    }
+
+    if (visibleSongs.isEmpty()) {
         EmptyState(emptyMessage, modifier)
         return
     }
-    val likedIds = remember(likedSongs) { likedSongs.map { it.id }.toSet() }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(songs, key = { it.id }) { song ->
+        items(visibleSongs, key = { it.id }) { song ->
             SongRowItem(
                 song = song,
                 isCurrentlyPlaying = currentSong?.id == song.id && isPlaying,

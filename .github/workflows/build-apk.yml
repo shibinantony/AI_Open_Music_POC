@@ -39,8 +39,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v3.1.0-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v3.1.0-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v3.1.1-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v3.1.1-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -53,25 +53,25 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v3.1.0
-          name: "JSABMusic v3.1.0 — Radio Mode, Dislike Filter, Dynamic Trending, True Shuffle"
+          tag_name: v3.1.1
+          name: "JSABMusic v3.1.1 — Radio Stations, Dislike Cloud Sync, Dynamic Trending & True Shuffle"
           body: |
-            ### 🎵 JSABMusic v3.1.0 — Radio Stations, Dislike Never-Play & Dynamic Trending
+            ### 🎵 JSABMusic v3.1.1 — Radio Stations, Dislike Cloud Sync & Dynamic Trending
 
             **Targeted for Samsung Galaxy S24 FE (Android 16 / One UI 8.5)**
 
-            #### ✨ New Features in v3.1.0:
+            #### ✨ Features & Improvements in v3.1.1:
             - 📻 **Endless Radio Mode:** Search for any song, album, artist, or playlist and tap the new **Radio icon** (`WifiTethering`) to launch a continuous queue of ~25 related, mood-matched songs with similar vibes and artists. Also accessible directly from the full Now Playing sheet!
-            - 👎 **Dislike / Never-Play Button:** Tap the **Thumbs Down** icon on any song row or in the player sheet to permanently block tracks you never want to hear again. Disliked songs are instantly purged from the active queue and permanently excluded from trending, search, and playback lists.
+            - 👎 **Dislike / Never-Play Button with Cloud Firestore Sync:** Tap the **Thumbs Down** icon on any song row or in the player sheet to permanently block tracks you never want to hear again. Disliked songs are instantly purged from the ExoPlayer active queue and permanently excluded from trending, search, and playback lists. Dislikes are automatically synchronized across devices via Google Cloud Firestore (`users/{uid}/disliked_songs`).
             - 🌐 **Dynamic Live Trending:** Replaced static fallback locking with dynamic background refresh that pulls daily fresh trending songs, top albums, popular artists, and playlists from JioSaavn. Automatically evicts stale cache on day change.
-            - 🔀 **True Uniform Shuffle All:** Fixed the shuffle loop bug where ExoPlayer would repeat a subset of tracks. The queue is now pre-shuffled in uniform random order so every single song plays without repeats.
-            - 📦 **100% Backward Compatible:** Firebase Firestore sync for Liked Songs and 7-day history remains fully preserved and compatible with existing cloud databases.
+            - 🔀 **True Uniform Shuffle All:** Fixed the shuffle loop bug where ExoPlayer would repeat a subset of tracks. The queue is pre-shuffled in uniform random order with ExoPlayer internal shuffle disabled so every single song plays without repeats.
+            - 📦 **100% Backward Compatible:** Firebase Firestore sync for Liked Songs, 7-day history, and Cloud session backup remains fully preserved and compatible with existing cloud databases.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v3.1.0-release.apk`** below and install directly.
+            Download **`JSABMusic-v3.1.1-release.apk`** below and install directly.
           files: |
-            dist/JSABMusic-v3.1.0-release.apk
-            dist/JSABMusic-v3.1.0-debug.apk
+            dist/JSABMusic-v3.1.1-release.apk
+            dist/JSABMusic-v3.1.1-debug.apk
           draft: false
           prerelease: false
         env:
