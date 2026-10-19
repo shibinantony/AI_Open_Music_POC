@@ -60,10 +60,22 @@ object JioSaavnApiClient {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Multi-Language Home Feed Engine (Instant Zero-Latency & Parallel Refresh)
+    // Multi-Language Home Feed Engine (Dynamic Daily Refresh)
     // ─────────────────────────────────────────────────────────────────────────
 
     private val homeFeedCache = ConcurrentHashMap<MusicLanguage, LanguageHomeFeed>()
+
+    // Track the calendar day the cache was last built so it refreshes daily
+    private var cacheBuiltOnDay: Int = -1
+
+    /** Call once per app launch to evict stale cache if the calendar day changed. */
+    fun evictStaleCacheIfNeeded() {
+        val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)
+        if (today != cacheBuiltOnDay) {
+            homeFeedCache.clear()
+            cacheBuiltOnDay = today
+        }
+    }
 
     /**
      * Immediately returns an instant, high-fidelity initial feed for the requested language.
@@ -155,7 +167,7 @@ object JioSaavnApiClient {
                 )
             )
         }
-        homeFeedCache[language] = feed
+        // Do not cache initial fallback so getHomeFeedForLanguage fetches live dynamic data
         return feed
     }
 
@@ -600,7 +612,9 @@ object JioSaavnApiClient {
                 val body = getJson(url)
                 if (body != null) {
                     val json = JSONObject(body)
-                    val list = json.optJSONArray("list") ?: json.optJSONArray("songs")
+                    val list = json.optJSONArray("list")
+                        ?: json.optJSONArray("songs")
+                        ?: json.optJSONObject("songs")?.optJSONArray("data")
                     if (list != null) {
                         for (i in 0 until list.length()) {
                             val s = parseSongJson(list.optJSONObject(i) ?: continue)
@@ -633,7 +647,10 @@ object JioSaavnApiClient {
                 val body = getJson(url)
                 if (body != null) {
                     val json = JSONObject(body)
-                    val list = json.optJSONArray("topSongs") ?: json.optJSONArray("songs")
+                    val list = json.optJSONArray("topSongs")
+                        ?: json.optJSONArray("songs")
+                        ?: json.optJSONObject("topSongs")?.optJSONArray("songs")
+                        ?: json.optJSONObject("topSongs")?.optJSONArray("data")
                     if (list != null) {
                         for (i in 0 until list.length()) {
                             val s = parseSongJson(list.optJSONObject(i) ?: continue)
@@ -647,6 +664,10 @@ object JioSaavnApiClient {
         if (songs.isEmpty() && artistName.isNotEmpty()) {
             try {
                 songs.addAll(searchSongs(artistName))
+                if (songs.isEmpty() && (artistName.contains(".") || artistName.contains(" "))) {
+                    val cleaned = artistName.replace(".", " ").replace(Regex("\\s+"), " ").trim()
+                    songs.addAll(searchSongs(cleaned))
+                }
             } catch (_: Exception) {}
         }
         songs
@@ -664,7 +685,9 @@ object JioSaavnApiClient {
                 val body = getJson(url)
                 if (body != null) {
                     val json = JSONObject(body)
-                    val list = json.optJSONArray("list") ?: json.optJSONArray("songs")
+                    val list = json.optJSONArray("list")
+                        ?: json.optJSONArray("songs")
+                        ?: json.optJSONObject("songs")?.optJSONArray("data")
                     if (list != null) {
                         for (i in 0 until list.length()) {
                             val s = parseSongJson(list.optJSONObject(i) ?: continue)
@@ -923,6 +946,59 @@ object JioSaavnApiClient {
         val songCount = moreInfo?.optInt("song_count") ?: obj.optInt("song_count", 0)
         val followers = moreInfo?.optString("follower_count") ?: obj.optString("follower_count")
         return PlaylistItem(id = id, name = name, artworkUrl = artwork, songCount = songCount, followerCount = followers)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Radio — Continuous Similar Songs Queue
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fetches a queue of ~25 songs similar to the seed song for Radio mode.
+     * Strategy:
+     *   1. JioSaavn reco.get (same song ID → mood-matched recommendations)
+     *   2. Artist top songs as supplement
+     *   3. Dedup, exclude seed itself, limit to 25
+     */
+    suspend fun getRadioSongs(seedSong: SongItem): List<SongItem> = withContext(Dispatchers.IO) {
+        val radioMap = LinkedHashMap<String, SongItem>()
+
+        // Pass 1: JioSaavn song-based recommendations
+        if (seedSong.id.isNotEmpty() && !seedSong.id.contains("_")) {
+            try {
+                val url = "$BASE_URL?__call=reco.getSongRecos&pid=${seedSong.id}&_format=json&_marker=0&api_version=4"
+                val body = getJson(url)
+                if (body != null) {
+                    val arr = JSONArray(body)
+                    for (i in 0 until arr.length()) {
+                        val s = parseSongJson(arr.optJSONObject(i) ?: continue)
+                        if (s != null && s.id != seedSong.id) radioMap[s.id] = s
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Pass 2: Artist songs to supplement (same style/vibe)
+        if (radioMap.size < 10 && seedSong.artist.isNotEmpty()) {
+            try {
+                val artistQuery = seedSong.artist.split(",").first().trim()
+                val similar = searchSongs(artistQuery)
+                for (s in similar) {
+                    if (s.id != seedSong.id && !radioMap.containsKey(s.id)) radioMap[s.id] = s
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Pass 3: Album songs as last resort
+        if (radioMap.size < 5 && seedSong.album.isNotEmpty()) {
+            try {
+                val albumSongs = searchSongs(seedSong.album)
+                for (s in albumSongs) {
+                    if (s.id != seedSong.id && !radioMap.containsKey(s.id)) radioMap[s.id] = s
+                }
+            } catch (_: Exception) {}
+        }
+
+        radioMap.values.take(25).toList()
     }
 
     // ─────────────────────────────────────────────────────────────────────────

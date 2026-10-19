@@ -60,6 +60,10 @@ class FirebaseSyncManager(private val context: Context) {
     private val _recentlyListened = MutableStateFlow<List<SongItem>>(getRecentlyListened())
     val recentlyListened: StateFlow<List<SongItem>> = _recentlyListened.asStateFlow()
 
+    /** Tracks song IDs the user has disliked. These songs are filtered from all playback queues. */
+    private val _dislikedIds = MutableStateFlow<Set<String>>(getDislikedIds())
+    val dislikedIds: StateFlow<Set<String>> = _dislikedIds.asStateFlow()
+
     private var likedListener: ListenerRegistration? = null
     private var historyListener: ListenerRegistration? = null
 
@@ -160,6 +164,48 @@ class FirebaseSyncManager(private val context: Context) {
                 Log.e(tag, "Error updating liked status in Firestore", e)
             }
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Dislike (Local-only — Never Play This Song Again)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun getDislikedIds(): Set<String> {
+        return try {
+            val json = prefs.getString("disliked_ids", null) ?: return emptySet()
+            val array = JSONArray(json)
+            (0 until array.length()).map { array.getString(it) }.toSet()
+        } catch (_: Exception) { emptySet() }
+    }
+
+    private fun saveDislikedIds(ids: Set<String>) {
+        try {
+            val array = JSONArray(ids.toList())
+            prefs.edit().putString("disliked_ids", array.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun isDisliked(songId: String): Boolean = _dislikedIds.value.contains(songId)
+
+    /**
+     * Toggles the dislike state for a song.
+     * Disliked songs are permanently excluded from all song lists and play queues.
+     */
+    fun toggleDislike(song: SongItem) {
+        val current = _dislikedIds.value.toMutableSet()
+        if (current.contains(song.id)) {
+            current.remove(song.id)
+        } else {
+            current.add(song.id)
+            // Auto-remove from liked songs if disliking
+            val liked = getLikedSongs().toMutableList()
+            if (liked.removeAll { it.id == song.id }) {
+                setLikedSongs(liked)
+                _likedSongs.value = liked
+            }
+        }
+        saveDislikedIds(current)
+        _dislikedIds.value = current
     }
 
     private fun getRecentlyListened(): List<SongItem> {

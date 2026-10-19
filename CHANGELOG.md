@@ -6,6 +6,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.1.0] — 2026-10-19
+
+### Added
+- **Radio Mode (Continuous Related / Themed Music):**
+  - Tapping the new **Radio icon** (`WifiTethering`) on any Song, Album, Artist, or Playlist launches an uninterrupted stream of ~25 related, mood-matched songs.
+  - Multi-pass recommendation engine: leverages JioSaavn song-based recommendation API (`reco.getSongRecos`), supplemented by same-artist top tracks and album style matches.
+  - Available on Search results (all tabs), Trending feed, Liked Music, 7-day history, and inside the full Now Playing sheet.
+- **Dislike Button (Never Play This Track Again):**
+  - Added a **Thumbs Down** action button (`Icons.Filled.ThumbDown` / `Icons.Outlined.ThumbDown`) to each song row and the Now Playing sheet.
+  - Disliking a song immediately purges it from the active playback queue (skipping to next if currently playing).
+  - Automatically un-likes the song if previously favorited.
+  - Permanently filters the disliked song from all playback queues, search songs, trending feeds, liked music, and history across app restarts.
+  - Stored locally in encrypted SharedPreferences for zero-friction personal preference persistence.
+
+### Fixed
+- **Trending Feed (Static to Dynamic Lazy-Loading):**
+  - Resolved cache pollution bug where initial static fallback feeds prevented live network feeds from ever loading.
+  - Background live refresh now queries JioSaavn API for fresh trending songs, top albums, artists, and playlists for every selected language.
+  - Added daily cache eviction (`evictStaleCacheIfNeeded`) to ensure trending content updates automatically every calendar day.
+- **Shuffle All (Uniform Random Playback of ALL Tracks):**
+  - Fixed loop bug where ExoPlayer's internal shuffle order would cycle through a repeating subset of tracks (e.g. 3 -> 7 -> 8 -> 2).
+  - The playback controller now pre-shuffles the queue into a uniform random permutation and runs ExoPlayer with internal shuffle disabled, guaranteeing that every single song in the playlist is played exactly once before repeating.
+- **Top Albums, Artists & Playlists Playback:**
+  - Enhanced JSON response parsing across `getAlbumSongs`, `getArtistSongs`, and `getPlaylistSongs` to support various object/array schemas returned by JioSaavn API endpoints.
+  - Added normalized phonetic search fallback for artists with dots and punctuation (e.g. "A.R. Rahman" -> "AR Rahman").
+
+---
+
 ## [3.0.2] — 2026-09-29
 
 ### Fixed

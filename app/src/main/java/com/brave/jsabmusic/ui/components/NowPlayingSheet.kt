@@ -27,6 +27,9 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,12 +53,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
+import com.brave.jsabmusic.api.model.SongItem
 import com.brave.jsabmusic.firebase.FirebaseSyncManager
 import com.brave.jsabmusic.player.PlayerController
 import com.brave.jsabmusic.ui.theme.AmoledBlack
 import com.brave.jsabmusic.ui.theme.AmoledCard
 import com.brave.jsabmusic.ui.theme.HeartRed
 import com.brave.jsabmusic.ui.theme.SovereignBlue
+import com.brave.jsabmusic.ui.theme.SovereignBlueAccent
 import com.brave.jsabmusic.ui.theme.TextPrimary
 import com.brave.jsabmusic.ui.theme.TextSecondary
 import java.util.Locale
@@ -66,6 +71,7 @@ fun NowPlayingSheet(
     playerController: PlayerController,
     firebaseSyncManager: FirebaseSyncManager,
     onOpenEqualizer: () -> Unit,
+    onRadioPlay: ((SongItem) -> Unit)? = null,
     onDismissRequest: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -77,7 +83,9 @@ fun NowPlayingSheet(
     val repeatMode by playerController.repeatMode.collectAsState()
 
     val likedSongs by firebaseSyncManager.likedSongs.collectAsState()
+    val dislikedIds by firebaseSyncManager.dislikedIds.collectAsState()
     val isLiked = song != null && likedSongs.any { it.id == song?.id }
+    val isDisliked = song != null && dislikedIds.contains(song?.id)
 
     if (song == null) return
 
@@ -147,7 +155,7 @@ fun NowPlayingSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Track Title, Artist, and Liked Heart Icon
+            // Track Title, Artist, and Liked / Radio / Dislike Actions
             Row(
                 modifier = Modifier
                     .fillMaxWidth(0.92f)
@@ -158,7 +166,7 @@ fun NowPlayingSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = song?.title ?: "",
-                        fontSize = 21.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
                         maxLines = 1,
@@ -174,16 +182,55 @@ fun NowPlayingSheet(
                     )
                 }
 
-                IconButton(
-                    onClick = { song?.let { firebaseSyncManager.toggleLike(it) } },
-                    modifier = Modifier.size(44.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = "Like Song",
-                        tint = if (isLiked) HeartRed else TextSecondary,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    // Radio Button
+                    if (onRadioPlay != null && song != null) {
+                        IconButton(
+                            onClick = { onRadioPlay(song!!) },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WifiTethering,
+                                contentDescription = "Play as Radio",
+                                tint = SovereignBlueAccent,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    // Like Button
+                    IconButton(
+                        onClick = { song?.let { firebaseSyncManager.toggleLike(it) } },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = "Like Song",
+                            tint = if (isLiked) HeartRed else TextSecondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    // Dislike Button (purges from queue immediately)
+                    IconButton(
+                        onClick = {
+                            song?.let { s ->
+                                firebaseSyncManager.toggleDislike(s)
+                                playerController.removeSongFromQueue(s.id)
+                            }
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isDisliked) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
+                            contentDescription = if (isDisliked) "Remove Dislike" else "Dislike (Never play again)",
+                            tint = if (isDisliked) Color(0xFFEF4444) else TextSecondary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
 

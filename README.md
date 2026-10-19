@@ -1,4 +1,4 @@
-# AI Open Music Architecture (JSABMusic v3.0.1)
+# AI Open Music Architecture (JSABMusic v3.1.0)
 ### *Pure Native AndroidX Media3 Audio Player & 320 kbps Direct CDN Framework for Android 16 & Samsung One UI 8.5*
 
 [![Platform](https://img.shields.io/badge/Platform-Android%2014%20|%2015%20|%2016-3DDC84?logo=android&logoColor=white)](https://developer.android.com/about/versions/16)
@@ -6,12 +6,12 @@
 [![Audio Quality](https://img.shields.io/badge/Audio%20Fidelity-320%20kbps%20Pristine%20AAC-38BDF8?logo=audiomack&logoColor=white)](#core-technical-innovations)
 [![Cloud Sync](https://img.shields.io/badge/Cloud%20Sync-Firebase%20%2B%20Google%20Auth-FFCA28?logo=firebase&logoColor=black)](#firebase-cloud-architecture)
 [![GitHub Releases](https://img.shields.io/github/v/release/shibinantony/AI_Open_Music_POC?color=38BDF8&label=Latest%20Release&logo=github)](https://github.com/shibinantony/AI_Open_Music_POC/releases/latest)
-[![Version](https://img.shields.io/badge/Version-v3.0.1-38BDF8)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-v3.1.0-38BDF8)](CHANGELOG.md)
 [![Binary Footprint](https://img.shields.io/badge/Binary%20Footprint-%3C%206.5%20MB%20(R8%20Full%20Mode)-brightgreen)](#)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > ### 🚀 [Download Latest Production APK from GitHub Releases](https://github.com/shibinantony/AI_Open_Music_POC/releases/latest)
-> **Direct APK Downloads:** [**`JSABMusic-v3.0.1-release.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.1/JSABMusic-v3.0.1-release.apk) &bull; [**`JSABMusic-v3.0.1-debug.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.0.1/JSABMusic-v3.0.1-debug.apk) &bull; [**View All Releases & Assets &rarr;**](https://github.com/shibinantony/AI_Open_Music_POC/releases)
+> **Direct APK Downloads:** [**`JSABMusic-v3.1.0-release.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.1.0/JSABMusic-v3.1.0-release.apk) &bull; [**`JSABMusic-v3.1.0-debug.apk`**](https://github.com/shibinantony/AI_Open_Music_POC/releases/download/v3.1.0/JSABMusic-v3.1.0-debug.apk) &bull; [**View All Releases & Assets &rarr;**](https://github.com/shibinantony/AI_Open_Music_POC/releases)
 
 ---
 
@@ -21,12 +21,15 @@
 
 Mobile web wrappers face insurmountable platform restrictions when interfacing with streaming services: the web platform is aggressively funneled into client-side app-install walls, pauses playback on mobile browsers, and exhausts memory through desktop ad-bidding frameworks.
 
-**JSABMusic v3.0.1** introduces critical bug fixes and platform optimizations for Samsung One UI & Android 16 alongside a rich Multi-Language Explore Hub:
+**JSABMusic v3.1.0** introduces endless Radio Stations, Dislike / Never-Play filtering, dynamic daily trending feeds, and true uniform shuffle alongside the complete suite of Samsung One UI & Android 16 optimizations:
 
-* **Zero Startup ANR (Application Not Responding):** Decoupled service creation from foreground elevation rules so the app opens instantly with zero ANR or watchdog dialogue boxes.
-* **Samsung Lock Screen & AOD Music Player Widget:** System Media Controls with `MediaStyle` notification, `MediaSession` token, and `IMPORTANCE_DEFAULT` public notification channel. Interactive controls (Play/Pause, Next Track, Previous Track, Seekbar) and high-res artwork show reliably on the lock screen and Always On Display.
-* **Instant Zero-Latency Launch & Explore Hub:** Pre-curated instant feeds for 0ms startup delay, paired with parallel background live refresh. Eliminates all waiting spinners and blank screens.
-* **Hardened Continuous Background Playback (Samsung One UI):** Protected by CPU WakeLocks, Wi-Fi high-performance locks, and `START_STICKY` service recovery to prevent Samsung's Smart Manager / Phantom Process Killer from stopping playback. Audio plays continuously like Spotify even when apps are swiped away.
+* **Endless Radio Mode:** Tap the **Radio icon** on any searched Song, Album, Artist, Playlist, or in the Now Playing sheet to start a continuous queue of ~25 related, mood-matched tracks.
+* **Dislike / Never-Play Preference:** Tap the **Thumbs Down** icon on any song to immediately purge it from playback and permanently exclude it from all feeds and queues.
+* **Dynamic Live Trending:** Live daily background refresh across English, Malayalam, Tamil, Hindi, Kannada, International, and Others. Stale cache is evicted daily.
+* **True Uniform Shuffle All:** Pre-shuffled permutation ensures all tracks play once with zero repetitive loops.
+* **Zero Startup ANR:** Decoupled service creation ensures 0ms instant startup without UI freezes.
+* **Samsung Lock Screen & AOD Music Player Widget:** System Media Controls with `MediaStyle` notification and `IMPORTANCE_HIGH` channel for seamless lock screen control.
+* **Hardened Continuous Background Playback (Samsung One UI):** Protected by CPU WakeLocks and `START_STICKY` service recovery to prevent Samsung Smart Manager from killing playback. Audio plays continuously like Spotify.
 * **Multi-Language Explore Hub:** One-tap dynamic language filter chips covering **English**, **Malayalam**, **Tamil**, **Hindi**, **Kannada**, **International**, and **Others**. Features curated Trending Tracks, Top Albums, Popular Artists, and Featured Playlists with instant drill-down streaming!
 * **Serene Sovereign Blue & Peaceful Doll Mascot:** Redesigned from the ground up with a custom peaceful doll mascot vector emblem wearing studio headphones, serene celestial blue theme (`SovereignBlue`), and the official motto: *"Enjoy the beauty of sovereign music"*.
 * **Protocol-Level 0% Advertisements:** Connects directly to high-speed Akamai and Cloudflare CDNs (`saavncdn.com`). Songs are streamed pure and unadulterated without touching any ad networks or telemetry SDKs.

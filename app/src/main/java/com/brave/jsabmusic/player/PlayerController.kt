@@ -213,7 +213,7 @@ class PlayerController(private val context: Context) {
                 val safeIndex = currentIndex.coerceIn(0, mediaItems.size - 1)
                 exoPlayer.setMediaItems(mediaItems, safeIndex, 0L)
                 exoPlayer.repeatMode = _repeatMode.value
-                exoPlayer.shuffleModeEnabled = _shuffleModeEnabled.value
+                exoPlayer.shuffleModeEnabled = false
                 exoPlayer.prepare()
                 exoPlayer.play()
                 loadArtworkBytesForLockscreen(song)
@@ -223,20 +223,50 @@ class PlayerController(private val context: Context) {
         }
     }
 
-    /** Plays an entire playlist, truly shuffling the queue if shuffle is enabled */
+    /** Plays an entire playlist, truly shuffling the queue if shuffle is enabled.
+     *  Pre-shuffles the list ourselves so ExoPlayer plays every track exactly once
+     *  in a random order (not its own internal probabilistic shuffle). */
     fun playAll(playlist: List<SongItem>, shuffle: Boolean = false) {
         if (playlist.isEmpty()) return
         _shuffleModeEnabled.value = shuffle
-        exoPlayer.shuffleModeEnabled = shuffle
 
         val targetQueue = if (shuffle) playlist.shuffled() else playlist
+        // Disable ExoPlayer's OWN shuffle since we already pre-shuffled the list;
+        // ExoPlayer shuffle is kept only for the toggleShuffle() interactive mode.
+        exoPlayer.shuffleModeEnabled = false
         playSong(targetQueue.first(), targetQueue)
+    }
+
+    /** Removes a song from the active queue and purges it from ExoPlayer if present. */
+    fun removeSongFromQueue(songId: String) {
+        val currentQ = _queue.value
+        if (!currentQ.any { it.id == songId }) return
+        val newQueue = currentQ.filter { it.id != songId }
+        _queue.value = newQueue
+
+        if (_currentSong.value?.id == songId) {
+            if (newQueue.isNotEmpty()) {
+                skipNext()
+            } else {
+                exoPlayer.stop()
+                exoPlayer.clearMediaItems()
+                _currentSong.value = null
+                _isPlaying.value = false
+            }
+        } else {
+            for (i in 0 until exoPlayer.mediaItemCount) {
+                if (exoPlayer.getMediaItemAt(i).mediaId == songId) {
+                    exoPlayer.removeMediaItem(i)
+                    break
+                }
+            }
+        }
     }
 
     fun toggleShuffle() {
         val nextState = !_shuffleModeEnabled.value
         _shuffleModeEnabled.value = nextState
-        exoPlayer.shuffleModeEnabled = nextState
+        exoPlayer.shuffleModeEnabled = false
 
         val current = _currentSong.value
         val currentQ = _queue.value
