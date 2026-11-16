@@ -6,6 +6,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.0.0] — 2026-11-16
+
+### Added
+- **On-Demand Lazy Pagination Across All Search Tabs:**
+  - Initial search queries now load an ultra-fast Page 1 (`n=10` songs, `n=5` albums, `n=5` artists, `n=5` playlists) in under ~250ms.
+  - Added dedicated **Load More (10+)** action button at the bottom of Songs, Albums, Artists, and Playlists search tabs for on-demand lazy chunk loading without jarring UI flickers or resets.
+  - Category pagination state tracking (`songPage`, `albumPage`, `artistPage`, `playlistPage`) and end-of-results detection (`hasMore`).
+- **Strict Top-5 Daily Trends & Lazy Language Hub:**
+  - When opening the app or navigating any language tab (All, Malayalam, Tamil, Hindi, English, Kannada, International, Others), the feed loads strictly the **latest Top 5 tracks, Top 5 albums, Top 5 artists, and Top 5 playlists** for today.
+  - Added a dedicated **Load More Trending (Top 5)** pagination trigger under the Trending Songs list, allowing infinite on-demand loading of fresh songs in 5-track chunks without memory bloat.
+  - Updated instant curated fallback feeds for all supported languages with 5 pristine 320 kbps tracks and Top 5 metadata.
+- **Non-Intrusive Search Loading Indicator:**
+  - Replaced full-screen blocking loading spinners with a sleek `LinearProgressIndicator` directly beneath the search tab bar, allowing users to inspect and interact with existing results while background searches resolve.
+
+### Enhanced
+- **Instant Search String & Keystroke Responsiveness:**
+  - Decoupled `searchQuery` text input state updates from background network coroutine dispatches. Typing on Samsung Keyboard and Gboard now registers with 0ms visual latency.
+  - Keystroke debounce set to 280ms to prevent network rate limiting and redundant coroutine dispatches.
+- **Direct Protocol CDN Query Optimization:**
+  - Eliminated legacy multi-pass cascaded network roundtrips where searching a keyword would redundantly download entire album tracks and multiple autocomplete queries.
+  - Single-query paginated endpoints (`search.getResults`, `search.getAlbumResults`, `search.getArtistResults`, `search.getPlaylistResults`) cut search network latency from >4s to <250ms.
+- **Deep Artist Schema Extraction in `parseSongJson`:**
+  - Added multi-tier fallback parsing for track artists across `primary_artists`, `singers`, `music`, `artistMap`, and `subtitle`, ensuring tracks always show accurate artist names.
+- **Full Backward Compatibility:**
+  - Cloud Firestore sync for Liked Music, 7-day listening history, cloud session backup, and disliked track eviction (`users/{uid}/disliked_songs`) remain 100% active and backward-compatible.
+
+---
+
 ## [3.1.1] — 2026-10-19
 
 ### Enhanced

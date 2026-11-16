@@ -66,6 +66,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -254,24 +255,42 @@ fun MainPlayerScreen(
     var searchQuery     by remember { mutableStateOf("") }
     var selectedTab     by remember { mutableIntStateOf(0) }
 
-    // â”€â”€ Data States â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    var songResults     by remember { mutableStateOf<List<SongItem>>(emptyList()) }
-    var albumResults    by remember { mutableStateOf<List<AlbumItem>>(emptyList()) }
-    var artistResults   by remember { mutableStateOf<List<ArtistItem>>(emptyList()) }
-    var playlistResults by remember { mutableStateOf<List<PlaylistItem>>(emptyList()) }
+    // ── Data States ──────────────────────────────────────────────────────────
+    var songResults      by remember { mutableStateOf<List<SongItem>>(emptyList()) }
+    var albumResults     by remember { mutableStateOf<List<AlbumItem>>(emptyList()) }
+    var artistResults    by remember { mutableStateOf<List<ArtistItem>>(emptyList()) }
+    var playlistResults  by remember { mutableStateOf<List<PlaylistItem>>(emptyList()) }
+
+    // ── Search Pagination State ───────────────────────────────────────────────
+    var songPage         by remember { mutableIntStateOf(1) }
+    var albumPage        by remember { mutableIntStateOf(1) }
+    var artistPage       by remember { mutableIntStateOf(1) }
+    var playlistPage     by remember { mutableIntStateOf(1) }
+
+    var hasMoreSongs     by remember { mutableStateOf(true) }
+    var hasMoreAlbums    by remember { mutableStateOf(true) }
+    var hasMoreArtists   by remember { mutableStateOf(true) }
+    var hasMorePlaylists by remember { mutableStateOf(true) }
+
+    var isLoading        by remember { mutableStateOf(false) }
+    var isLoadingMore    by remember { mutableStateOf(false) }
+
+    // ── Home Feed State (Top 5 Trends) ───────────────────────────────────────
     var selectedLanguage by remember { mutableStateOf(MusicLanguage.ALL) }
     var homeFeed         by remember { mutableStateOf(JioSaavnApiClient.getInstantInitialFeed(MusicLanguage.ALL)) }
-    var trendingSongs   by remember { mutableStateOf(homeFeed.trendingSongs) }
-    var isLoading       by remember { mutableStateOf(false) }
+    var trendingSongs    by remember { mutableStateOf(homeFeed.trendingSongs.take(5)) }
+    var trendingPage     by remember { mutableIntStateOf(1) }
+    var hasMoreTrending  by remember { mutableStateOf(true) }
+    var isTrendingLoadingMore by remember { mutableStateOf(false) }
     var isFeedLoading    by remember { mutableStateOf(false) }
 
-    // â”€â”€ Sheets State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Sheets State ─────────────────────────────────────────────────────────
     var showEqualizer   by remember { mutableStateOf(false) }
     var showSleepTimer  by remember { mutableStateOf(false) }
     var showNowPlaying  by remember { mutableStateOf(false) }
     var showUserProfile by remember { mutableStateOf(false) }
 
-    // â”€â”€ Reactive Flows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Reactive Flows ───────────────────────────────────────────────────────
     val currentSong     by playerController.currentSong.collectAsState()
     val isPlaying       by playerController.isPlaying.collectAsState()
     val isTimerRunning  by sleepTimerManager.isTimerRunning.collectAsState()
@@ -280,7 +299,7 @@ fun MainPlayerScreen(
     val recentlyListened by firebaseSyncManager.recentlyListened.collectAsState()
     val dislikedIds     by firebaseSyncManager.dislikedIds.collectAsState()
 
-    // â”€â”€ Google Sign In Activity Result Launcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Google Sign In Activity Result Launcher ──────────────────────────────
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -323,11 +342,13 @@ fun MainPlayerScreen(
     }
 
     LaunchedEffect(selectedLanguage) {
+        trendingPage = 1
+        hasMoreTrending = true
         val instant = JioSaavnApiClient.getInstantInitialFeed(selectedLanguage)
         if (homeFeed.language != selectedLanguage) {
             homeFeed = instant
             if (instant.trendingSongs.isNotEmpty()) {
-                trendingSongs = instant.trendingSongs
+                trendingSongs = instant.trendingSongs.take(5)
             }
         }
         try {
@@ -335,7 +356,7 @@ fun MainPlayerScreen(
             val feed = JioSaavnApiClient.getHomeFeedForLanguage(selectedLanguage)
             homeFeed = feed
             if (feed.trendingSongs.isNotEmpty()) {
-                trendingSongs = feed.trendingSongs
+                trendingSongs = feed.trendingSongs.take(5)
             }
         } catch (_: Exception) {
         } finally {
@@ -356,7 +377,7 @@ fun MainPlayerScreen(
         } catch (_: Exception) {}
     }
 
-    // â”€â”€ Search trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Search Trigger & Lazy Pagination Handlers ────────────────────────────
     var searchJob by remember { mutableStateOf<Job?>(null) }
 
     fun triggerSearch(query: String) {
@@ -367,22 +388,138 @@ fun MainPlayerScreen(
             albumResults = emptyList()
             artistResults = emptyList()
             playlistResults = emptyList()
+            songPage = 1; albumPage = 1; artistPage = 1; playlistPage = 1
+            hasMoreSongs = true; hasMoreAlbums = true; hasMoreArtists = true; hasMorePlaylists = true
             isLoading = false
             return
         }
         searchJob = scope.launch {
-            delay(280) // Debounce keystrokes to prevent race conditions & rate limiting
+            delay(280) // Debounce keystrokes to ensure smooth, responsive typing
             isLoading = true
+            songPage = 1; albumPage = 1; artistPage = 1; playlistPage = 1
             try {
                 val results = JioSaavnApiClient.searchAll(cleanQuery)
-                songResults     = results.songs
-                albumResults    = results.albums
-                artistResults   = results.artists
-                playlistResults = results.playlists
+                songResults      = results.songs
+                albumResults     = results.albums
+                artistResults    = results.artists
+                playlistResults  = results.playlists
+                hasMoreSongs     = results.songs.size >= 10
+                hasMoreAlbums    = results.albums.size >= 5
+                hasMoreArtists   = results.artists.size >= 5
+                hasMorePlaylists = results.playlists.size >= 5
             } catch (_: Exception) {
             } finally {
                 isLoading = false
             }
+        }
+    }
+
+    fun loadMoreSongs() {
+        val cleanQuery = searchQuery.trim()
+        if (isLoadingMore || !hasMoreSongs || cleanQuery.length < 2) return
+        scope.launch {
+            isLoadingMore = true
+            val nextPage = songPage + 1
+            val more = JioSaavnApiClient.searchSongsPage(cleanQuery, page = nextPage, count = 10)
+            if (more.isEmpty()) {
+                hasMoreSongs = false
+            } else {
+                val currentList = songResults.toMutableList()
+                val newItems = more.filter { m -> currentList.none { it.id == m.id } }
+                if (newItems.isEmpty() || more.size < 10) {
+                    hasMoreSongs = false
+                }
+                songResults = (currentList + newItems)
+                songPage = nextPage
+            }
+            isLoadingMore = false
+        }
+    }
+
+    fun loadMoreAlbums() {
+        val cleanQuery = searchQuery.trim()
+        if (isLoadingMore || !hasMoreAlbums || cleanQuery.length < 2) return
+        scope.launch {
+            isLoadingMore = true
+            val nextPage = albumPage + 1
+            val more = JioSaavnApiClient.searchAlbumsPage(cleanQuery, page = nextPage, count = 10)
+            if (more.isEmpty()) {
+                hasMoreAlbums = false
+            } else {
+                val currentList = albumResults.toMutableList()
+                val newItems = more.filter { m -> currentList.none { it.id == m.id } }
+                if (newItems.isEmpty() || more.size < 10) {
+                    hasMoreAlbums = false
+                }
+                albumResults = (currentList + newItems)
+                albumPage = nextPage
+            }
+            isLoadingMore = false
+        }
+    }
+
+    fun loadMoreArtists() {
+        val cleanQuery = searchQuery.trim()
+        if (isLoadingMore || !hasMoreArtists || cleanQuery.length < 2) return
+        scope.launch {
+            isLoadingMore = true
+            val nextPage = artistPage + 1
+            val more = JioSaavnApiClient.searchArtistsPage(cleanQuery, page = nextPage, count = 10)
+            if (more.isEmpty()) {
+                hasMoreArtists = false
+            } else {
+                val currentList = artistResults.toMutableList()
+                val newItems = more.filter { m -> currentList.none { it.id == m.id } }
+                if (newItems.isEmpty() || more.size < 10) {
+                    hasMoreArtists = false
+                }
+                artistResults = (currentList + newItems)
+                artistPage = nextPage
+            }
+            isLoadingMore = false
+        }
+    }
+
+    fun loadMorePlaylists() {
+        val cleanQuery = searchQuery.trim()
+        if (isLoadingMore || !hasMorePlaylists || cleanQuery.length < 2) return
+        scope.launch {
+            isLoadingMore = true
+            val nextPage = playlistPage + 1
+            val more = JioSaavnApiClient.searchPlaylistsPage(cleanQuery, page = nextPage, count = 10)
+            if (more.isEmpty()) {
+                hasMorePlaylists = false
+            } else {
+                val currentList = playlistResults.toMutableList()
+                val newItems = more.filter { m -> currentList.none { it.id == m.id } }
+                if (newItems.isEmpty() || more.size < 10) {
+                    hasMorePlaylists = false
+                }
+                playlistResults = (currentList + newItems)
+                playlistPage = nextPage
+            }
+            isLoadingMore = false
+        }
+    }
+
+    fun loadMoreTrending() {
+        if (isTrendingLoadingMore || !hasMoreTrending) return
+        scope.launch {
+            isTrendingLoadingMore = true
+            val nextPage = trendingPage + 1
+            val more = JioSaavnApiClient.fetchMoreTrendingSongs(selectedLanguage, page = nextPage, count = 5)
+            if (more.isEmpty()) {
+                hasMoreTrending = false
+            } else {
+                val currentList = trendingSongs.toMutableList()
+                val newItems = more.filter { m -> currentList.none { it.id == m.id } }
+                if (newItems.isEmpty() || more.size < 5) {
+                    hasMoreTrending = false
+                }
+                trendingSongs = (currentList + newItems)
+                trendingPage = nextPage
+            }
+            isTrendingLoadingMore = false
         }
     }
 
@@ -610,23 +747,36 @@ fun MainPlayerScreen(
                                 tabs = SEARCH_TABS,
                                 onTabSelected = { selectedTab = it }
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            if (isLoading) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp, bottom = 4.dp)
+                                        .height(2.dp),
+                                    color = SovereignBlue,
+                                    trackColor = AmoledCard
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                         } else {
                             LanguageFilterChips(
                                 selectedLanguage = selectedLanguage,
                                 onLanguageSelected = { lang ->
-                                    selectedLanguage = lang
-                                    val instant = JioSaavnApiClient.getInstantInitialFeed(lang)
-                                    homeFeed = instant
-                                    if (instant.trendingSongs.isNotEmpty()) {
-                                        trendingSongs = instant.trendingSongs
+                                    if (selectedLanguage != lang) {
+                                        selectedLanguage = lang
+                                        val instant = JioSaavnApiClient.getInstantInitialFeed(lang)
+                                        homeFeed = instant
+                                        trendingSongs = instant.trendingSongs.take(5)
+                                        trendingPage = 1
+                                        hasMoreTrending = true
                                     }
                                 }
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             val visibleTrendingHeader = trendingSongs.filter { it.id !in dislikedIds }
                             PlayAllHeaderRow(
-                                title = "Trending ${selectedLanguage.displayName} (320 Kbps)",
+                                title = "Trending ${selectedLanguage.displayName} (${visibleTrendingHeader.size})",
                                 onPlayAll = { playerController.playAll(visibleTrendingHeader, shuffle = false) },
                                 onShuffleAll = { playerController.playAll(visibleTrendingHeader, shuffle = true) },
                                 isEnabled = visibleTrendingHeader.isNotEmpty()
@@ -635,109 +785,128 @@ fun MainPlayerScreen(
                         }
 
                         // Content List
-                        if (isLoading) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(color = SovereignBlue)
-                            }
-                        } else if (searchQuery.length >= 2) {
-                            when (selectedTab) {
-                                0 -> SongList(
-                                    songs = songResults.filter { it.id !in dislikedIds },
-                                    currentSong = currentSong,
-                                    isPlaying = isPlaying,
-                                    likedSongs = likedSongs,
-                                    dislikedIds = dislikedIds,
-                                    firebaseSyncManager = firebaseSyncManager,
-                                    playerController = playerController,
-                                    modifier = Modifier.weight(1f),
-                                    onSongClick = { song -> playerController.playSong(song, songResults.filter { it.id !in dislikedIds }) },
-                                    onRadioPlay = { song ->
-                                        scope.launch {
-                                            isLoading = true
-                                            val radioQueue = JioSaavnApiClient.getRadioSongs(song)
-                                            isLoading = false
-                                            val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
-                                            if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
-                                        }
+                        if (searchQuery.length >= 2) {
+                            val isInitialSearchEmpty = isLoading && songResults.isEmpty() && albumResults.isEmpty() && artistResults.isEmpty() && playlistResults.isEmpty()
+                            if (isInitialSearchEmpty) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularProgressIndicator(color = SovereignBlue)
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text("Searching JioSaavn...", color = TextSecondary, fontSize = 13.sp)
                                     }
-                                )
-                                1 -> AlbumList(
-                                    albums = albumResults,
-                                    modifier = Modifier.weight(1f),
-                                    onAlbumClick = { album ->
-                                        scope.launch {
-                                            isLoading = true
-                                            val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name).filter { it.id !in dislikedIds }
-                                            isLoading = false
-                                            if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                        }
-                                    },
-                                    onRadioClick = { album ->
-                                        scope.launch {
-                                            isLoading = true
-                                            val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name).filter { it.id !in dislikedIds }
-                                            if (songs.isNotEmpty()) {
-                                                val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
-                                                val fullQueue = (songs + radioQueue).distinctBy { it.id }
-                                                playerController.playSong(fullQueue.first(), fullQueue)
+                                }
+                            } else {
+                                when (selectedTab) {
+                                    0 -> SongList(
+                                        songs = songResults.filter { it.id !in dislikedIds },
+                                        currentSong = currentSong,
+                                        isPlaying = isPlaying,
+                                        likedSongs = likedSongs,
+                                        dislikedIds = dislikedIds,
+                                        firebaseSyncManager = firebaseSyncManager,
+                                        playerController = playerController,
+                                        hasMore = hasMoreSongs,
+                                        isLoadingMore = isLoadingMore,
+                                        onLoadMore = { loadMoreSongs() },
+                                        modifier = Modifier.weight(1f),
+                                        onSongClick = { song -> playerController.playSong(song, songResults.filter { it.id !in dislikedIds }) },
+                                        onRadioPlay = { song ->
+                                            scope.launch {
+                                                isLoading = true
+                                                val radioQueue = JioSaavnApiClient.getRadioSongs(song)
+                                                isLoading = false
+                                                val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
+                                                if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
                                             }
-                                            isLoading = false
                                         }
-                                    }
-                                )
-                                2 -> ArtistList(
-                                    artists = artistResults,
-                                    modifier = Modifier.weight(1f),
-                                    onArtistClick = { artist ->
-                                        scope.launch {
-                                            isLoading = true
-                                            val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name).filter { it.id !in dislikedIds }
-                                            isLoading = false
-                                            if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                        }
-                                    },
-                                    onRadioClick = { artist ->
-                                        scope.launch {
-                                            isLoading = true
-                                            val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name).filter { it.id !in dislikedIds }
-                                            if (songs.isNotEmpty()) {
-                                                val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
-                                                val fullQueue = (songs + radioQueue).distinctBy { it.id }
-                                                playerController.playSong(fullQueue.first(), fullQueue)
+                                    )
+                                    1 -> AlbumList(
+                                        albums = albumResults,
+                                        hasMore = hasMoreAlbums,
+                                        isLoadingMore = isLoadingMore,
+                                        onLoadMore = { loadMoreAlbums() },
+                                        modifier = Modifier.weight(1f),
+                                        onAlbumClick = { album ->
+                                            scope.launch {
+                                                isLoading = true
+                                                val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name).filter { it.id !in dislikedIds }
+                                                isLoading = false
+                                                if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
                                             }
-                                            isLoading = false
-                                        }
-                                    }
-                                )
-                                3 -> PlaylistList(
-                                    playlists = playlistResults,
-                                    modifier = Modifier.weight(1f),
-                                    onPlaylistClick = { playlist ->
-                                        scope.launch {
-                                            isLoading = true
-                                            val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name).filter { it.id !in dislikedIds }
-                                            isLoading = false
-                                            if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                        }
-                                    },
-                                    onRadioClick = { playlist ->
-                                        scope.launch {
-                                            isLoading = true
-                                            val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name).filter { it.id !in dislikedIds }
-                                            if (songs.isNotEmpty()) {
-                                                val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
-                                                val fullQueue = (songs + radioQueue).distinctBy { it.id }
-                                                playerController.playSong(fullQueue.first(), fullQueue)
+                                        },
+                                        onRadioClick = { album ->
+                                            scope.launch {
+                                                isLoading = true
+                                                val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name).filter { it.id !in dislikedIds }
+                                                if (songs.isNotEmpty()) {
+                                                    val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
+                                                    val fullQueue = (songs + radioQueue).distinctBy { it.id }
+                                                    playerController.playSong(fullQueue.first(), fullQueue)
+                                                }
+                                                isLoading = false
                                             }
-                                            isLoading = false
                                         }
-                                    }
-                                )
+                                    )
+                                    2 -> ArtistList(
+                                        artists = artistResults,
+                                        hasMore = hasMoreArtists,
+                                        isLoadingMore = isLoadingMore,
+                                        onLoadMore = { loadMoreArtists() },
+                                        modifier = Modifier.weight(1f),
+                                        onArtistClick = { artist ->
+                                            scope.launch {
+                                                isLoading = true
+                                                val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name).filter { it.id !in dislikedIds }
+                                                isLoading = false
+                                                if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
+                                            }
+                                        },
+                                        onRadioClick = { artist ->
+                                            scope.launch {
+                                                isLoading = true
+                                                val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name).filter { it.id !in dislikedIds }
+                                                if (songs.isNotEmpty()) {
+                                                    val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
+                                                    val fullQueue = (songs + radioQueue).distinctBy { it.id }
+                                                    playerController.playSong(fullQueue.first(), fullQueue)
+                                                }
+                                                isLoading = false
+                                            }
+                                        }
+                                    )
+                                    3 -> PlaylistList(
+                                        playlists = playlistResults,
+                                        hasMore = hasMorePlaylists,
+                                        isLoadingMore = isLoadingMore,
+                                        onLoadMore = { loadMorePlaylists() },
+                                        modifier = Modifier.weight(1f),
+                                        onPlaylistClick = { playlist ->
+                                            scope.launch {
+                                                isLoading = true
+                                                val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name).filter { it.id !in dislikedIds }
+                                                isLoading = false
+                                                if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
+                                            }
+                                        },
+                                        onRadioClick = { playlist ->
+                                            scope.launch {
+                                                isLoading = true
+                                                val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name).filter { it.id !in dislikedIds }
+                                                if (songs.isNotEmpty()) {
+                                                    val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
+                                                    val fullQueue = (songs + radioQueue).distinctBy { it.id }
+                                                    playerController.playSong(fullQueue.first(), fullQueue)
+                                                }
+                                                isLoading = false
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         } else {
                             ExploreLanguageHub(
@@ -750,6 +919,9 @@ fun MainPlayerScreen(
                                 firebaseSyncManager = firebaseSyncManager,
                                 playerController = playerController,
                                 isFeedLoading = isFeedLoading,
+                                hasMoreTrending = hasMoreTrending,
+                                isTrendingLoadingMore = isTrendingLoadingMore,
+                                onLoadMoreTrending = { loadMoreTrending() },
                                 onAlbumClick = { album ->
                                     scope.launch {
                                         isLoading = true
@@ -1378,9 +1550,71 @@ private fun SearchTabBar(
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────
+// Load More Pagination Button
+// ─────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun LoadMoreButton(
+    label: String,
+    isLoading: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = AmoledCard,
+            border = BorderStroke(1.dp, SovereignBlue.copy(alpha = 0.5f)),
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .clickable(enabled = !isLoading, onClick = onClick)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = SovereignBlue,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Loading more...",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SovereignBlueAccent
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = SovereignBlue,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = label,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Song list
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun SongList(
@@ -1392,6 +1626,9 @@ private fun SongList(
     playerController: PlayerController? = null,
     dislikedIds: Set<String> = emptySet(),
     emptyMessage: String = "No songs found",
+    hasMore: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onSongClick: (SongItem) -> Unit,
     onRadioPlay: ((SongItem) -> Unit)? = null
@@ -1425,17 +1662,29 @@ private fun SongList(
                 onClick = { onSongClick(song) }
             )
         }
+        if (hasMore && onLoadMore != null) {
+            item {
+                LoadMoreButton(
+                    label = "Load More Songs (10+)",
+                    isLoading = isLoadingMore,
+                    onClick = onLoadMore
+                )
+            }
+        }
         item { Spacer(modifier = Modifier.height(80.dp)) }
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────
 // Album list
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun AlbumList(
     albums: List<AlbumItem>,
+    hasMore: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onAlbumClick: (AlbumItem) -> Unit,
     onRadioClick: ((AlbumItem) -> Unit)? = null
@@ -1454,6 +1703,15 @@ private fun AlbumList(
                 onClick = { onAlbumClick(album) },
                 onRadioClick = onRadioClick?.let { cb -> { cb(album) } }
             )
+        }
+        if (hasMore && onLoadMore != null) {
+            item {
+                LoadMoreButton(
+                    label = "Load More Albums (10+)",
+                    isLoading = isLoadingMore,
+                    onClick = onLoadMore
+                )
+            }
         }
         item { Spacer(modifier = Modifier.height(80.dp)) }
     }
@@ -1542,13 +1800,16 @@ private fun AlbumCard(
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────
 // Artist list
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ArtistList(
     artists: List<ArtistItem>,
+    hasMore: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onArtistClick: (ArtistItem) -> Unit,
     onRadioClick: ((ArtistItem) -> Unit)? = null
@@ -1567,6 +1828,15 @@ private fun ArtistList(
                 onClick = { onArtistClick(artist) },
                 onRadioClick = onRadioClick?.let { cb -> { cb(artist) } }
             )
+        }
+        if (hasMore && onLoadMore != null) {
+            item {
+                LoadMoreButton(
+                    label = "Load More Artists (10+)",
+                    isLoading = isLoadingMore,
+                    onClick = onLoadMore
+                )
+            }
         }
         item { Spacer(modifier = Modifier.height(80.dp)) }
     }
@@ -1665,13 +1935,16 @@ private fun ArtistCard(
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────
 // Playlist list
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun PlaylistList(
     playlists: List<PlaylistItem>,
+    hasMore: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onPlaylistClick: (PlaylistItem) -> Unit,
     onRadioClick: ((PlaylistItem) -> Unit)? = null
@@ -1690,6 +1963,15 @@ private fun PlaylistList(
                 onClick = { onPlaylistClick(playlist) },
                 onRadioClick = onRadioClick?.let { cb -> { cb(playlist) } }
             )
+        }
+        if (hasMore && onLoadMore != null) {
+            item {
+                LoadMoreButton(
+                    label = "Load More Playlists (10+)",
+                    isLoading = isLoadingMore,
+                    onClick = onLoadMore
+                )
+            }
         }
         item { Spacer(modifier = Modifier.height(80.dp)) }
     }
@@ -2135,6 +2417,9 @@ private fun ExploreLanguageHub(
     firebaseSyncManager: FirebaseSyncManager,
     playerController: PlayerController,
     isFeedLoading: Boolean,
+    hasMoreTrending: Boolean = false,
+    isTrendingLoadingMore: Boolean = false,
+    onLoadMoreTrending: (() -> Unit)? = null,
     onAlbumClick: (AlbumItem) -> Unit,
     onArtistClick: (ArtistItem) -> Unit,
     onPlaylistClick: (PlaylistItem) -> Unit,
@@ -2142,7 +2427,6 @@ private fun ExploreLanguageHub(
     modifier: Modifier = Modifier
 ) {
     val likedIds = remember(likedSongs) { likedSongs.map { it.id }.toSet() }
-    // Filter disliked songs from the trending feed
     val visibleTrending = remember(trendingSongs, dislikedIds) {
         trendingSongs.filter { it.id !in dislikedIds }
     }
@@ -2161,8 +2445,8 @@ private fun ExploreLanguageHub(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Top Trending songs (first 10, disliked filtered)
-        items(visibleTrending.take(10), key = { it.id }) { song ->
+        // Trending songs (starts with Top 5, grows with on-demand pagination)
+        items(visibleTrending, key = { it.id }) { song ->
             SongRowItem(
                 song = song,
                 isCurrentlyPlaying = currentSong?.id == song.id && isPlaying,
@@ -2178,57 +2462,46 @@ private fun ExploreLanguageHub(
             )
         }
 
-        // Top Albums Section
+        // On-demand pagination for trending songs
+        if (hasMoreTrending && onLoadMoreTrending != null) {
+            item {
+                LoadMoreButton(
+                    label = "Load More Trending (Top 5)",
+                    isLoading = isTrendingLoadingMore,
+                    onClick = onLoadMoreTrending
+                )
+            }
+        }
+
+        // Top 5 Albums Section
         if (homeFeed?.topAlbums?.isNotEmpty() == true) {
             item {
-                SectionHeader("Top Albums")
+                SectionHeader("Top 5 Albums")
                 HorizontalAlbumRow(
-                    albums = homeFeed.topAlbums,
+                    albums = homeFeed.topAlbums.take(5),
                     onAlbumClick = onAlbumClick
                 )
             }
         }
 
-        // Popular Artists Section
+        // Popular Artists Section (Top 5)
         if (homeFeed?.topArtists?.isNotEmpty() == true) {
             item {
                 SectionHeader("Popular Artists")
                 HorizontalArtistRow(
-                    artists = homeFeed.topArtists,
+                    artists = homeFeed.topArtists.take(5),
                     onArtistClick = onArtistClick
                 )
             }
         }
 
-        // Featured Playlists Section
+        // Featured Playlists Section (Top 5)
         if (homeFeed?.topPlaylists?.isNotEmpty() == true) {
             item {
                 SectionHeader("Featured Playlists")
                 HorizontalPlaylistRow(
-                    playlists = homeFeed.topPlaylists,
+                    playlists = homeFeed.topPlaylists.take(5),
                     onPlaylistClick = onPlaylistClick
-                )
-            }
-        }
-
-        // Additional trending songs (if > 10)
-        if (visibleTrending.size > 10) {
-            item {
-                SectionHeader("More Trending Tracks")
-            }
-            items(visibleTrending.drop(10), key = { it.id }) { song ->
-                SongRowItem(
-                    song = song,
-                    isCurrentlyPlaying = currentSong?.id == song.id && isPlaying,
-                    isLiked = likedIds.contains(song.id),
-                    isDisliked = dislikedIds.contains(song.id),
-                    onLikeToggle = { firebaseSyncManager.toggleLike(song) },
-                    onDislikeToggle = {
-                        firebaseSyncManager.toggleDislike(song)
-                        playerController.removeSongFromQueue(song.id)
-                    },
-                    onRadioPlay = onRadioPlay?.let { cb -> { cb(song) } },
-                    onClick = { playerController.playSong(song, visibleTrending) }
                 )
             }
         }
