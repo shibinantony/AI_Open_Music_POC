@@ -21,15 +21,20 @@ import java.util.concurrent.TimeUnit
 /**
  * Supported Music Languages for dynamic trending feed curation and exploration.
  */
-enum class MusicLanguage(val code: String, val displayName: String, val searchKeyword: String) {
-    ALL("all", "All", "Trending Today"),
-    MALAYALAM("malayalam", "Malayalam", "Malayalam Top Hits"),
-    TAMIL("tamil", "Tamil", "Tamil Top Hits"),
-    HINDI("hindi", "Hindi", "Hindi Top Hits"),
-    ENGLISH("english", "English", "English Pop Hits"),
-    KANNADA("kannada", "Kannada", "Kannada Top Hits"),
-    INTERNATIONAL("international", "International", "Billboard Hot 100"),
-    OTHERS("others", "Others", "Telugu Punjabi Hits")
+enum class MusicLanguage(
+    val code: String,
+    val displayName: String,
+    val searchKeyword: String,
+    val cookieValue: String
+) {
+    ALL("all", "All", "Trending Today", "hindi,english,malayalam,tamil"),
+    MALAYALAM("malayalam", "Malayalam", "Malayalam Top Hits", "malayalam"),
+    TAMIL("tamil", "Tamil", "Tamil Top Hits", "tamil"),
+    HINDI("hindi", "Hindi", "Hindi Top Hits", "hindi"),
+    ENGLISH("english", "English", "English Pop Hits", "english"),
+    KANNADA("kannada", "Kannada", "Kannada Top Hits", "kannada"),
+    INTERNATIONAL("international", "International", "Billboard Hot 100", "english"),
+    OTHERS("others", "Others", "Telugu Punjabi Hits", "telugu,punjabi")
 }
 
 /**
@@ -72,17 +77,30 @@ object JioSaavnApiClient {
     // ─────────────────────────────────────────────────────────────────────────
 
     private val homeFeedCache = ConcurrentHashMap<MusicLanguage, LanguageHomeFeed>()
+    private val liveChartIdCache = ConcurrentHashMap<MusicLanguage, String>()
 
-    // Track the calendar day the cache was last built so it refreshes daily
+    // Track the calendar day & timestamp the cache was last built so it refreshes daily / every 4h
     private var cacheBuiltOnDay: Int = -1
+    private var cacheBuiltTimestampMs: Long = 0L
+    private const val CACHE_TTL_MS = 4L * 60L * 60L * 1000L // 4 hours
 
-    /** Call once per app launch to evict stale cache if the calendar day changed. */
+    /** Call on launch & resume to evict stale cache if the calendar day changed or TTL expired. */
     fun evictStaleCacheIfNeeded() {
         val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)
-        if (today != cacheBuiltOnDay) {
+        val now = System.currentTimeMillis()
+        if (today != cacheBuiltOnDay || (cacheBuiltTimestampMs > 0L && now - cacheBuiltTimestampMs > CACHE_TTL_MS)) {
             homeFeedCache.clear()
+            liveChartIdCache.clear()
             cacheBuiltOnDay = today
+            cacheBuiltTimestampMs = now
         }
+    }
+
+    /** Clears all cached feeds for an explicit user-triggered refresh. */
+    fun clearHomeFeedCache() {
+        homeFeedCache.clear()
+        liveChartIdCache.clear()
+        cacheBuiltTimestampMs = System.currentTimeMillis()
     }
 
     /**
@@ -248,44 +266,193 @@ object JioSaavnApiClient {
     }
 
     /**
-     * Dynamically pulls the latest Top 5 trends for today in the requested language.
-     * Uses small, lightweight network payloads (count = 5) to prevent app freezes.
+     * Dynamically pulls the latest live Top 5 trends, new albums, artists, and playlists
+     * for today in the requested language using JioSaavn's live launch & chart endpoints.
+     * Never caches static fallback data so a failed cold-start never freezes trends.
      */
-    suspend fun getHomeFeedForLanguage(language: MusicLanguage): LanguageHomeFeed = coroutineScope {
-        homeFeedCache[language]?.let { return@coroutineScope it }
+    suspend fun getHomeFeedForLanguage(
+        language: MusicLanguage,
+        forceRefresh: Boolean = false
+    ): LanguageHomeFeed = coroutineScope {
+        evictStaleCacheIfNeeded()
+        if (!forceRefresh) {
+            homeFeedCache[language]?.let { return@coroutineScope it }
+        }
 
         val initial = getInstantInitialFeed(language)
-        val query = language.searchKeyword
 
-        val freshFeed = withTimeoutOrNull(3500L) {
-            val songsDeferred = async { fetchQuickSongs(query, page = 1, count = 5) }
-            val albumsDeferred = async { fetchQuickAlbums(query, page = 1, count = 5) }
-            val artistsDeferred = async { fetchQuickArtists(query, page = 1, count = 5) }
-            val playlistsDeferred = async { fetchQuickPlaylists(query, page = 1, count = 5) }
+        val liveFeed = withTimeoutOrNull(7500L) {
+            val launchJson = withContext(Dispatchers.IO) {
+                val url = "$BASE_URL?__call=webapi.getLaunchData&_format=json&_marker=0&api_version=4&ctx=web6dot0"
+                getJsonWithCookie(url, "L=${language.cookieValue}")
+            }
 
-            val songs = songsDeferred.await().ifEmpty { initial.trendingSongs }.take(5)
-            val albums = albumsDeferred.await().ifEmpty { initial.topAlbums }.take(5)
-            val artists = artistsDeferred.await().ifEmpty { initial.topArtists }.take(5)
-            val playlists = playlistsDeferred.await().ifEmpty { initial.topPlaylists }.take(5)
+            if (launchJson != null) {
+                val root = try { JSONObject(launchJson) } catch (_: Exception) { null }
+                if (root != null) {
+                    // 1. Resolve live Top Chart ID for today's Top 5 songs
+                    val chartsArr = root.optJSONArray("charts")
+                    val chartId = if (chartsArr != null && chartsArr.length() > 0) {
+                        chartsArr.optJSONObject(0)?.optString("id")?.takeIf { it.isNotEmpty() }
+                    } else null
 
-            LanguageHomeFeed(
-                language = language,
-                trendingSongs = songs,
-                topAlbums = albums,
-                topArtists = artists,
-                topPlaylists = playlists
-            )
-        } ?: initial
+                    if (chartId != null) {
+                        liveChartIdCache[language] = chartId
+                    }
 
-        homeFeedCache[language] = freshFeed
-        freshFeed
+                    // 2. Fetch live Top 5 songs from the chart in parallel with any fallback needed
+                    val songsDeferred = async {
+                        if (chartId != null) {
+                            fetchPlaylistPageSongs(chartId, page = 1, count = 5)
+                        } else {
+                            emptyList()
+                        }
+                    }
+
+                    // 3. Parse live new_albums (handling song-typed items with more_info.album_id)
+                    val parsedAlbums = mutableListOf<AlbumItem>()
+                    val albumsArr = root.optJSONArray("new_albums")
+                    if (albumsArr != null) {
+                        for (i in 0 until albumsArr.length()) {
+                            val obj = albumsArr.optJSONObject(i) ?: continue
+                            val item = parseLaunchAlbumJson(obj)
+                            if (item != null) parsedAlbums.add(item)
+                            if (parsedAlbums.size >= 5) break
+                        }
+                    }
+
+                    // 4. Parse live artist_recos
+                    val parsedArtists = mutableListOf<ArtistItem>()
+                    val artistsArr = root.optJSONArray("artist_recos")
+                    if (artistsArr != null) {
+                        for (i in 0 until artistsArr.length()) {
+                            val obj = artistsArr.optJSONObject(i) ?: continue
+                            val item = parseArtistJson(obj)
+                            if (item != null) parsedArtists.add(item)
+                            if (parsedArtists.size >= 5) break
+                        }
+                    }
+
+                    // 5. Parse live top_playlists
+                    val parsedPlaylists = mutableListOf<PlaylistItem>()
+                    val playlistsArr = root.optJSONArray("top_playlists")
+                    if (playlistsArr != null) {
+                        for (i in 0 until playlistsArr.length()) {
+                            val obj = playlistsArr.optJSONObject(i) ?: continue
+                            val item = parsePlaylistJson(obj)
+                            if (item != null) parsedPlaylists.add(item)
+                            if (parsedPlaylists.size >= 5) break
+                        }
+                    }
+
+                    var liveSongs = songsDeferred.await()
+                    if (liveSongs.isEmpty()) {
+                        liveSongs = fetchQuickSongs(language.searchKeyword, page = 1, count = 5)
+                    }
+
+                    val finalAlbums = if (parsedAlbums.isNotEmpty()) parsedAlbums.distinctBy { it.id }.take(5)
+                        else fetchQuickAlbums(language.searchKeyword, page = 1, count = 5)
+                    val finalArtists = if (parsedArtists.isNotEmpty()) parsedArtists.distinctBy { it.id }.take(5)
+                        else fetchQuickArtists(language.searchKeyword, page = 1, count = 5)
+                    val finalPlaylists = if (parsedPlaylists.isNotEmpty()) parsedPlaylists.distinctBy { it.id }.take(5)
+                        else fetchQuickPlaylists(language.searchKeyword, page = 1, count = 5)
+
+                    val hasLiveContent = liveSongs.isNotEmpty() || finalAlbums.isNotEmpty() ||
+                        finalArtists.isNotEmpty() || finalPlaylists.isNotEmpty()
+
+                    if (hasLiveContent) {
+                        return@withTimeoutOrNull LanguageHomeFeed(
+                            language = language,
+                            trendingSongs = liveSongs.ifEmpty { initial.trendingSongs }.take(5),
+                            topAlbums = finalAlbums.ifEmpty { initial.topAlbums }.take(5),
+                            topArtists = finalArtists.ifEmpty { initial.topArtists }.take(5),
+                            topPlaylists = finalPlaylists.ifEmpty { initial.topPlaylists }.take(5)
+                        )
+                    }
+                }
+            }
+
+            // Secondary live path if getLaunchData was unavailable
+            val songsDeferred = async { fetchQuickSongs(language.searchKeyword, page = 1, count = 5) }
+            val albumsDeferred = async { fetchQuickAlbums(language.searchKeyword, page = 1, count = 5) }
+            val artistsDeferred = async { fetchQuickArtists(language.searchKeyword, page = 1, count = 5) }
+            val playlistsDeferred = async { fetchQuickPlaylists(language.searchKeyword, page = 1, count = 5) }
+
+            val songs = songsDeferred.await()
+            val albums = albumsDeferred.await()
+            val artists = artistsDeferred.await()
+            val playlists = playlistsDeferred.await()
+
+            if (songs.isEmpty() && albums.isEmpty() && artists.isEmpty() && playlists.isEmpty()) {
+                null
+            } else {
+                LanguageHomeFeed(
+                    language = language,
+                    trendingSongs = songs.ifEmpty { initial.trendingSongs }.take(5),
+                    topAlbums = albums.ifEmpty { initial.topAlbums }.take(5),
+                    topArtists = artists.ifEmpty { initial.topArtists }.take(5),
+                    topPlaylists = playlists.ifEmpty { initial.topPlaylists }.take(5)
+                )
+            }
+        }
+
+        if (liveFeed != null) {
+            homeFeedCache[language] = liveFeed
+            cacheBuiltTimestampMs = System.currentTimeMillis()
+            liveFeed
+        } else {
+            // Do NOT cache static fallback so next attempt retries the network
+            initial
+        }
+    }
+
+    /**
+     * Fetches a specific page of songs from a live JioSaavn chart/playlist.
+     */
+    private suspend fun fetchPlaylistPageSongs(playlistId: String, page: Int, count: Int = 5): List<SongItem> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<SongItem>()
+        try {
+            val url = "$BASE_URL?__call=playlist.getDetails&listid=${URLEncoder.encode(playlistId, "UTF-8")}&p=$page&n=$count&_format=json&_marker=0&api_version=4&ctx=web6dot0"
+            val body = getJson(url) ?: return@withContext songs
+            val root = JSONObject(body)
+            val listArr = root.optJSONArray("list") ?: root.optJSONArray("songs") ?: return@withContext songs
+            for (i in 0 until listArr.length()) {
+                val song = parseSongJson(listArr.optJSONObject(i) ?: continue)
+                if (song != null) songs.add(song)
+            }
+        } catch (_: Exception) {}
+        songs.distinctBy { it.id }
+    }
+
+    /**
+     * Parses album entries from webapi.getLaunchData's new_albums array.
+     * Handles both type="album" and type="song" (where album_id is inside more_info).
+     */
+    private fun parseLaunchAlbumJson(obj: JSONObject): AlbumItem? {
+        val type = obj.optString("type")
+        val moreInfo = obj.optJSONObject("more_info")
+        if (type == "song" && moreInfo != null) {
+            val albumId = moreInfo.optString("album_id").ifEmpty { obj.optString("id") }
+            if (albumId.isEmpty()) return null
+            val name = unescapeHtml(moreInfo.optString("album").ifEmpty { obj.optString("title") }).ifEmpty { return null }
+            val year = obj.optString("year")
+            val artist = unescapeHtml(moreInfo.optString("music").ifEmpty { obj.optString("subtitle") })
+            val artwork = MediaUrlResolver.upgradeArtworkUrl(obj.optString("image"))
+            return AlbumItem(id = albumId, name = name, year = year, artist = artist, artworkUrl = artwork, songCount = 1)
+        }
+        return parseAlbumJson(obj)
     }
 
     /**
      * Lazily fetches more trending songs for a given language tab (Page 2, 3, etc.).
-     * Fetches exactly [count] items (default 5) for smooth, step-by-step pagination.
+     * Paginates through the live Top 50 chart first, falling back to search pagination.
      */
     suspend fun fetchMoreTrendingSongs(language: MusicLanguage, page: Int, count: Int = 5): List<SongItem> = withContext(Dispatchers.IO) {
+        val chartId = liveChartIdCache[language]
+        if (chartId != null) {
+            val chartSongs = fetchPlaylistPageSongs(chartId, page = page, count = count)
+            if (chartSongs.isNotEmpty()) return@withContext chartSongs
+        }
         fetchQuickSongs(language.searchKeyword, page = page, count = count)
     }
 
@@ -1070,12 +1237,18 @@ object JioSaavnApiClient {
     // ─────────────────────────────────────────────────────────────────────────
 
     private fun getJson(url: String): String? {
+        return getJsonWithCookie(url, null)
+    }
+
+    private fun getJsonWithCookie(url: String, cookie: String?): String? {
         return try {
-            val request = Request.Builder()
+            val builder = Request.Builder()
                 .url(url)
                 .addHeader("User-Agent", BROWSER_UA)
-                .build()
-            client.newCall(request).execute().use { response ->
+            if (!cookie.isNullOrEmpty()) {
+                builder.addHeader("Cookie", cookie)
+            }
+            client.newCall(builder.build()).execute().use { response ->
                 if (!response.isSuccessful) null else response.body?.string()
             }
         } catch (_: Exception) { null }

@@ -12,8 +12,8 @@ android {
         applicationId = "com.brave.jsabmusic"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "4.0.0"
+        versionCode = 11
+        versionName = "4.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         ndk { abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a", "x86_64")) }

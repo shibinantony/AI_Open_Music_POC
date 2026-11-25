@@ -39,8 +39,8 @@ jobs:
       - name: Rename Output APKs for Direct Download
         run: |
           mkdir -p dist
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v4.0.0-release.apk \;
-          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v4.0.0-debug.apk \;
+          find app/build/outputs/apk/release -name "*.apk" -exec cp {} dist/JSABMusic-v4.1.0-release.apk \;
+          find app/build/outputs/apk/debug -name "*.apk" -exec cp {} dist/JSABMusic-v4.1.0-debug.apk \;
 
       - name: Upload Release APK as Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -53,26 +53,28 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v4.0.0
-          name: "JSABMusic v4.0.0 — Paginated Search Engine & Top-5 Daily Trends"
+          tag_name: v4.1.0
+          name: "JSABMusic v4.1.0 — Live Daily Trends, Instant Search Keyboard & Spotify-Grade UX"
           body: |
-            ### 🎵 JSABMusic v4.0.0 — Paginated Search Engine & Top-5 Daily Trends
+            ### 🎵 JSABMusic v4.1.0 — Live Daily Trends, Instant Search Keyboard & Spotify-Grade UX
 
             **Targeted for Samsung Galaxy S24 FE (Android 14 / 15 / 16 & Samsung One UI 8.5)**
 
-            #### 🚀 Major Architectural Innovations in v4.0.0:
-            - ⚡ **Zero-Latency Search Input & Instant Typing:** Resolved keystroke input lag by decoupling text state updates and optimizing debounce timing (280ms). Keystrokes register immediately on Samsung Keyboard & Gboard with 0ms visual stutter.
-            - 📄 **On-Demand Lazy Pagination Across All Search Tabs:** Initial search now loads a fast, lightweight Page 1 (`n=10` songs, `n=5` albums/artists/playlists) in under **~250ms** (down from >4s). Users can tap the new **Load More (10+)** pill at the bottom of any tab (Songs, Albums, Artists, Playlists) to lazily fetch subsequent pages on demand without screen reloads.
-            - 🌐 **Strict Top-5 Daily Trends & Lazy Language Hub:** When launching the app or opening any language tab (Malayalam, Tamil, Hindi, English, Kannada, International, etc.), the feed loads strictly the **Top 5 tracks, Top 5 albums, Top 5 artists, and Top 5 playlists** for today instead of overwhelming network bandwidth. A dedicated **Load More Trending (Top 5)** pill allows infinite on-demand loading of fresh tracks in 5-song chunks.
-            - 🛡️ **Elimination of Deep Recursive Album Drills:** Replaced legacy multi-pass cascaded network roundtrips with direct single-query endpoints, drastically saving battery, cellular data, and thread contention.
-            - 📊 **Non-Intrusive Background Loading Indicator:** Replaced full-screen flickering spinners with a sleek, non-blocking `LinearProgressIndicator` directly beneath the search tabs, keeping existing results visible while fresh pages load.
-            - 👎 **Full Dislike & Cloud Firestore Synchronization:** Dislike eviction, Cloud Firestore synchronization (`users/{uid}/disliked_songs`), radio stations, and 320 kbps uncompressed CDN playback remain 100% active and backward-compatible.
+            #### 🐛 Critical Bug Fixes:
+            - 🔥 **Live Daily Trends (No More Static Feeds):** Replaced static keyword-search home feeds with JioSaavn's live `webapi.getLaunchData` + `playlist.getDetails` chart endpoints (`India Superhits Top 50` per language), added 4-hour TTL + `onResume()` cache eviction, removed fallback caching on cold-start timeouts, and added a manual Refresh Trends button.
+            - ⌨️ **Instant First-Tap Search Keyboard:** Switched `windowSoftInputMode` to `adjustNothing` to eliminate edge-to-edge full-screen relayout stalls on Samsung One UI 8.5, and isolated Search into a dedicated tab with `FocusRequester` + `SoftwareKeyboardController.show()` so the keyboard appears immediately on the first tap.
+
+            #### ✨ Spotify-Grade Design Enhancements:
+            - 🧭 **Spotify-Style Bottom Navigation Bar:** Clean 4-tab navigation (`Home`, `Search`, `Liked`, `Recent`) with Sovereign Blue active indicators.
+            - 🎧 **Interactive Collection Detail Sheet:** Tapping any Album, Artist, or Playlist opens a rich Spotify-style modal sheet with Play All, Shuffle, Radio, and individual track selection.
+            - ⚡ **Home "Jump Back In" Grid & Search "Browse All" Grid:** 2-column quick picks on Home and colorful mood/language category tiles on Search.
+            - 📊 **Mini-Player Live Progress Bar:** Floating Spotify-style mini-player with a 2dp live playback progress indicator.
 
             #### 📥 Download & Install:
-            Download **`JSABMusic-v4.0.0-release.apk`** below and install directly.
+            Download **`JSABMusic-v4.1.0-release.apk`** below and install directly.
           files: |
-            dist/JSABMusic-v4.0.0-release.apk
-            dist/JSABMusic-v4.0.0-debug.apk
+            dist/JSABMusic-v4.1.0-release.apk
+            dist/JSABMusic-v4.1.0-debug.apk
           draft: false
           prerelease: false
         env:

@@ -57,8 +57,29 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import com.brave.jsabmusic.ui.components.CollectionDetailSheet
+import com.brave.jsabmusic.ui.components.CollectionDetailState
+import com.brave.jsabmusic.ui.theme.SpotifyBase
+import com.brave.jsabmusic.ui.theme.SpotifyCard
+import com.brave.jsabmusic.ui.theme.SpotifyElevated
+import com.brave.jsabmusic.ui.theme.SpotifyNavBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -216,6 +237,11 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) {}
     }
 
+    override fun onResume() {
+        super.onResume()
+        JioSaavnApiClient.evictStaleCacheIfNeeded()
+    }
+
     override fun onDestroy() {
         if (isServiceBound) {
             try { unbindService(serviceConnection) } catch (_: Exception) {}
@@ -225,15 +251,38 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Navigation & Tab definitions
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 private val SEARCH_TABS = listOf("Songs", "Albums", "Artists", "Playlists")
 private enum class MainNavSection(val label: String) {
-    EXPLORE("Explore"),
-    LIKED_MUSIC("Liked Music"),
-    RECENT("Recent (7d)")
+    HOME("Home"),
+    SEARCH("Search"),
+    LIKED_MUSIC("Liked"),
+    RECENT("Recent")
+}
+
+private data class BrowseCategory(
+    val title: String,
+    val query: String,
+    val color: Color
+)
+
+private val BROWSE_CATEGORIES = listOf(
+    BrowseCategory("Malayalam Hits", "Malayalam latest hits", Color(0xFF0EA5E9)),
+    BrowseCategory("Bollywood Top", "Hindi latest hits", Color(0xFFE11D48)),
+    BrowseCategory("Tamil Bangers", "Tamil latest hits", Color(0xFF7C3AED)),
+    BrowseCategory("Global Pop", "English pop hits", Color(0xFF059669)),
+    BrowseCategory("Arijit Singh", "Arijit Singh", Color(0xFFD97706)),
+    BrowseCategory("Sushin Shyam", "Sushin Shyam", Color(0xFF2563EB)),
+    BrowseCategory("Anirudh Mix", "Anirudh Ravichander", Color(0xFF9333EA)),
+    BrowseCategory("Chill Acoustic", "Acoustic chill hits", Color(0xFF0D9488))
+)
+
+private fun getTimeGreeting(): String {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    return when {
+        hour < 12 -> "Good morning"
+        hour < 17 -> "Good afternoon"
+        else -> "Good evening"
+    }
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -248,12 +297,15 @@ fun MainPlayerScreen(
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val searchFocusRequester = remember { FocusRequester() }
     val context = LocalContext.current
 
-    // â”€â”€ Navigation State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    var currentSection  by remember { mutableStateOf(MainNavSection.EXPLORE) }
+    // ── Navigation State ─────────────────────────────────────────────────────
+    var currentSection  by remember { mutableStateOf(MainNavSection.HOME) }
     var searchQuery     by remember { mutableStateOf("") }
     var selectedTab     by remember { mutableIntStateOf(0) }
+    var shouldAutoFocusSearch by remember { mutableStateOf(false) }
 
     // ── Data States ──────────────────────────────────────────────────────────
     var songResults      by remember { mutableStateOf<List<SongItem>>(emptyList()) }
@@ -289,10 +341,13 @@ fun MainPlayerScreen(
     var showSleepTimer  by remember { mutableStateOf(false) }
     var showNowPlaying  by remember { mutableStateOf(false) }
     var showUserProfile by remember { mutableStateOf(false) }
+    var collectionDetail by remember { mutableStateOf<CollectionDetailState?>(null) }
 
     // ── Reactive Flows ───────────────────────────────────────────────────────
     val currentSong     by playerController.currentSong.collectAsState()
     val isPlaying       by playerController.isPlaying.collectAsState()
+    val positionMs      by playerController.currentPositionMs.collectAsState()
+    val durationMs      by playerController.durationMs.collectAsState()
     val isTimerRunning  by sleepTimerManager.isTimerRunning.collectAsState()
     val currentUser     by firebaseSyncManager.currentUser.collectAsState()
     val likedSongs      by firebaseSyncManager.likedSongs.collectAsState()
@@ -523,598 +578,782 @@ fun MainPlayerScreen(
         }
     }
 
-    // â”€â”€ Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    fun refreshCurrentFeed() {
+        scope.launch {
+            isFeedLoading = true
+            trendingPage = 1
+            hasMoreTrending = true
+            JioSaavnApiClient.clearHomeFeedCache()
+            val feed = JioSaavnApiClient.getHomeFeedForLanguage(selectedLanguage, forceRefresh = true)
+            homeFeed = feed
+            if (feed.trendingSongs.isNotEmpty()) {
+                trendingSongs = feed.trendingSongs.take(5)
+            }
+            isFeedLoading = false
+        }
+    }
+
+    fun openAlbumDetail(album: AlbumItem) {
+        collectionDetail = CollectionDetailState(
+            title = album.name,
+            subtitle = buildString {
+                if (album.artist.isNotEmpty()) append(album.artist)
+                if (album.year.isNotEmpty()) {
+                    if (album.artist.isNotEmpty()) append(" · ")
+                    append(album.year)
+                }
+            }.ifEmpty { "Album" },
+            badge = "ALBUM",
+            artworkUrl = album.artworkUrl,
+            isArtist = false,
+            isLoading = true
+        )
+        scope.launch {
+            val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name)
+            collectionDetail = collectionDetail?.copy(isLoading = false, songs = songs)
+        }
+    }
+
+    fun openArtistDetail(artist: ArtistItem) {
+        collectionDetail = CollectionDetailState(
+            title = artist.name,
+            subtitle = if (artist.followerCount.isNotEmpty())
+                "${formatFollowers(artist.followerCount)} followers" else "Artist",
+            badge = "ARTIST TOP TRACKS",
+            artworkUrl = artist.artworkUrl,
+            isArtist = true,
+            isLoading = true
+        )
+        scope.launch {
+            val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name)
+            collectionDetail = collectionDetail?.copy(isLoading = false, songs = songs)
+        }
+    }
+
+    fun openPlaylistDetail(playlist: PlaylistItem) {
+        collectionDetail = CollectionDetailState(
+            title = playlist.name,
+            subtitle = if (playlist.songCount > 0) "${playlist.songCount} tracks" else "Playlist",
+            badge = "PLAYLIST",
+            artworkUrl = playlist.artworkUrl,
+            isArtist = false,
+            isLoading = true
+        )
+        scope.launch {
+            val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name)
+            collectionDetail = collectionDetail?.copy(isLoading = false, songs = songs)
+        }
+    }
+
+    // Auto-focus Search input & show keyboard cleanly when entering Search tab
+    LaunchedEffect(currentSection, shouldAutoFocusSearch) {
+        if (currentSection == MainNavSection.SEARCH && shouldAutoFocusSearch) {
+            delay(60)
+            try {
+                searchFocusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {}
+            shouldAutoFocusSearch = false
+        }
+    }
+
+    // ── Spotify-Grade Layout ─────────────────────────────────────────────────
     Scaffold(
         containerColor = AmoledBlack,
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .navigationBarsPadding()
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
+            .navigationBarsPadding(),
+        bottomBar = {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-            ) {
-
-                // â”€â”€ Header Bar with Peaceful Doll Mascot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp, bottom = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Custom Peaceful Doll Mascot Icon
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_serene_doll_music),
-                            contentDescription = "JSAB Mascot",
-                            tint = Color.Unspecified,
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, AmoledBlack.copy(alpha = 0.96f), AmoledBlack)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "JSAB Music",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = "Enjoy the beauty of sovereign music",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = SovereignBlueAccent
-                            )
-                        }
-                    }
+                    )
+            ) {
+                // Persistent Spotify-style Mini-Player with live 2dp progress bar
+                if (currentSong != null) {
+                    val isSongLiked = likedSongs.any { it.id == currentSong?.id }
+                    val progress = if (durationMs > 0L) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
 
-                    // Action Controls Pill + User Profile
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = AmoledCard,
-                        border = BorderStroke(1.dp, Color(0xFF1E293B))
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showNowPlaying = true },
+                        color = SpotifyCard,
+                        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                        tonalElevation = 8.dp
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = { showEqualizer = true },
-                                modifier = Modifier.size(34.dp)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.GraphicEq,
-                                    contentDescription = "Equalizer",
-                                    tint = SovereignBlue,
-                                    modifier = Modifier.size(17.dp)
+                                AsyncImage(
+                                    model = currentSong?.highResArtworkUrl,
+                                    contentDescription = currentSong?.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(6.dp))
                                 )
-                            }
-                            IconButton(
-                                onClick = { showSleepTimer = true },
-                                modifier = Modifier.size(34.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bedtime,
-                                    contentDescription = "Sleep Timer",
-                                    tint = if (isTimerRunning) SovereignBlue else TextSecondary,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = { showUserProfile = true },
-                                modifier = Modifier.size(34.dp)
-                            ) {
-                                if (currentUser?.photoUrl != null) {
-                                    AsyncImage(
-                                        model = currentUser?.photoUrl,
-                                        contentDescription = "Profile",
-                                        modifier = Modifier
-                                            .size(22.dp)
-                                            .clip(CircleShape)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = currentSong?.title ?: "",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                } else {
+                                    Text(
+                                        text = currentSong?.artist ?: "",
+                                        fontSize = 11.sp,
+                                        color = TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { currentSong?.let { firebaseSyncManager.toggleLike(it) } },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Default.AccountCircle,
-                                        contentDescription = "User Account",
-                                        tint = if (currentUser?.isAnonymous == false) SovereignBlue else TextSecondary,
+                                        imageVector = if (isSongLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                        contentDescription = "Like Song",
+                                        tint = if (isSongLiked) HeartRed else TextSecondary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
+
+                                IconButton(
+                                    onClick = { playerController.togglePlay() },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "Play/Pause",
+                                        tint = SovereignBlue,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { playerController.skipNext() },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SkipNext,
+                                        contentDescription = "Next",
+                                        tint = TextPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             }
+                            // Thin Spotify-style live progress bar at the bottom of Mini-Player
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp),
+                                color = SovereignBlue,
+                                trackColor = Color(0xFF1E293B)
+                            )
                         }
                     }
                 }
 
-                // â”€â”€ Main Section Switcher (Explore | Liked Music | Recent) â”€â”€â”€â”€
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Spotify-Style Bottom Navigation Bar
+                Surface(
+                    color = SpotifyNavBar,
+                    border = BorderStroke(0.5.dp, Color(0xFF1E293B))
                 ) {
-                    MainNavSection.values().forEach { section ->
-                        val isSelected = currentSection == section
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isSelected) SovereignBlue else AmoledCard,
-                            border = BorderStroke(1.dp, if (isSelected) SovereignBlue else Color(0xFF1E293B)),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                                .clickable {
-                                    currentSection = section
-                                    if (section != MainNavSection.EXPLORE) {
-                                        focusManager.clearFocus()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MainNavSection.values().forEach { section ->
+                            val isSelected = currentSection == section
+                            val icon = when (section) {
+                                MainNavSection.HOME -> if (isSelected) Icons.Filled.Home else Icons.Outlined.Home
+                                MainNavSection.SEARCH -> if (isSelected) Icons.Filled.Search else Icons.Outlined.Search
+                                MainNavSection.LIKED_MUSIC -> if (isSelected) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder
+                                MainNavSection.RECENT -> if (isSelected) Icons.Filled.History else Icons.Outlined.History
+                            }
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        if (section == MainNavSection.SEARCH) {
+                                            shouldAutoFocusSearch = true
+                                        } else {
+                                            focusManager.clearFocus()
+                                            keyboardController?.hide()
+                                        }
+                                        currentSection = section
                                     }
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 4.dp)
                             ) {
                                 Icon(
-                                    imageVector = when (section) {
-                                        MainNavSection.EXPLORE -> Icons.Default.Explore
-                                        MainNavSection.LIKED_MUSIC -> Icons.Default.Favorite
-                                        MainNavSection.RECENT -> Icons.Default.History
-                                    },
-                                    contentDescription = null,
-                                    tint = if (isSelected) AmoledBlack else if (section == MainNavSection.LIKED_MUSIC) HeartRed else TextSecondary,
-                                    modifier = Modifier.size(15.dp)
+                                    imageVector = icon,
+                                    contentDescription = section.label,
+                                    tint = if (isSelected) SovereignBlue else TextSecondary,
+                                    modifier = Modifier.size(22.dp)
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = section.label,
-                                    fontSize = 12.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) AmoledBlack else TextPrimary,
+                                    color = if (isSelected) SovereignBlue else TextSecondary,
                                     maxLines = 1
                                 )
                             }
                         }
                     }
                 }
+            }
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
+        ) {
+            // ── Spotify-Style Top Greeting Header ────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_serene_doll_music),
+                        contentDescription = "JSAB Mascot",
+                        tint = Color.Unspecified,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = getTimeGreeting(),
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "JSAB Music · 320K Sovereign",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = SovereignBlueAccent
+                        )
+                    }
+                }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // â”€â”€ Section Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                when (currentSection) {
-                    MainNavSection.EXPLORE -> {
-                        // Search Bar
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { query ->
-                                searchQuery = query
-                                triggerSearch(query)
-                            },
-                            placeholder = {
-                                Text("Search songs, artists, albums, playlists...", color = TextSecondary, fontSize = 13.sp)
-                            },
-                            leadingIcon = {
+                // Action Controls Pill + Refresh + User Profile
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = SpotifyCard,
+                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { refreshCurrentFeed() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh Trends",
+                                tint = if (isFeedLoading) SovereignBlue else TextSecondary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { showEqualizer = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = "Equalizer",
+                                tint = SovereignBlue,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { showSleepTimer = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bedtime,
+                                contentDescription = "Sleep Timer",
+                                tint = if (isTimerRunning) SovereignBlue else TextSecondary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { showUserProfile = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            if (currentUser?.photoUrl != null) {
+                                AsyncImage(
+                                    model = currentUser?.photoUrl,
+                                    contentDescription = "Profile",
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                )
+                            } else {
                                 Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search",
-                                    tint = TextSecondary
+                                    imageVector = Icons.Default.AccountCircle,
+                                    contentDescription = "User Account",
+                                    tint = if (currentUser?.isAnonymous == false) SovereignBlue else TextSecondary,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = {
-                                        searchQuery = ""
-                                        songResults = emptyList(); albumResults = emptyList()
-                                        artistResults = emptyList(); playlistResults = emptyList()
-                                        selectedTab = 0
-                                    }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Clear,
-                                            contentDescription = "Clear",
-                                            tint = TextSecondary
-                                        )
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor   = AmoledCard,
-                                unfocusedContainerColor = AmoledCard,
-                                focusedBorderColor      = SovereignBlue,
-                                unfocusedBorderColor    = Color(0xFF1E293B),
-                                focusedTextColor        = TextPrimary,
-                                unfocusedTextColor      = TextPrimary
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Tab bar or Action Bar
-                        if (searchQuery.length >= 2) {
-                            SearchTabBar(
-                                selectedTab = selectedTab,
-                                tabs = SEARCH_TABS,
-                                onTabSelected = { selectedTab = it }
-                            )
-                            if (isLoading) {
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 4.dp, bottom = 4.dp)
-                                        .height(2.dp),
-                                    color = SovereignBlue,
-                                    trackColor = AmoledCard
-                                )
-                            } else {
-                                Spacer(modifier = Modifier.height(8.dp))
                             }
-                        } else {
-                            LanguageFilterChips(
-                                selectedLanguage = selectedLanguage,
-                                onLanguageSelected = { lang ->
-                                    if (selectedLanguage != lang) {
-                                        selectedLanguage = lang
-                                        val instant = JioSaavnApiClient.getInstantInitialFeed(lang)
-                                        homeFeed = instant
-                                        trendingSongs = instant.trendingSongs.take(5)
-                                        trendingPage = 1
-                                        hasMoreTrending = true
-                                    }
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            val visibleTrendingHeader = trendingSongs.filter { it.id !in dislikedIds }
-                            PlayAllHeaderRow(
-                                title = "Trending ${selectedLanguage.displayName} (${visibleTrendingHeader.size})",
-                                onPlayAll = { playerController.playAll(visibleTrendingHeader, shuffle = false) },
-                                onShuffleAll = { playerController.playAll(visibleTrendingHeader, shuffle = true) },
-                                isEnabled = visibleTrendingHeader.isNotEmpty()
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
                         }
-
-                        // Content List
-                        if (searchQuery.length >= 2) {
-                            val isInitialSearchEmpty = isLoading && songResults.isEmpty() && albumResults.isEmpty() && artistResults.isEmpty() && playlistResults.isEmpty()
-                            if (isInitialSearchEmpty) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        CircularProgressIndicator(color = SovereignBlue)
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Text("Searching JioSaavn...", color = TextSecondary, fontSize = 13.sp)
-                                    }
-                                }
-                            } else {
-                                when (selectedTab) {
-                                    0 -> SongList(
-                                        songs = songResults.filter { it.id !in dislikedIds },
-                                        currentSong = currentSong,
-                                        isPlaying = isPlaying,
-                                        likedSongs = likedSongs,
-                                        dislikedIds = dislikedIds,
-                                        firebaseSyncManager = firebaseSyncManager,
-                                        playerController = playerController,
-                                        hasMore = hasMoreSongs,
-                                        isLoadingMore = isLoadingMore,
-                                        onLoadMore = { loadMoreSongs() },
-                                        modifier = Modifier.weight(1f),
-                                        onSongClick = { song -> playerController.playSong(song, songResults.filter { it.id !in dislikedIds }) },
-                                        onRadioPlay = { song ->
-                                            scope.launch {
-                                                isLoading = true
-                                                val radioQueue = JioSaavnApiClient.getRadioSongs(song)
-                                                isLoading = false
-                                                val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
-                                                if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
-                                            }
-                                        }
-                                    )
-                                    1 -> AlbumList(
-                                        albums = albumResults,
-                                        hasMore = hasMoreAlbums,
-                                        isLoadingMore = isLoadingMore,
-                                        onLoadMore = { loadMoreAlbums() },
-                                        modifier = Modifier.weight(1f),
-                                        onAlbumClick = { album ->
-                                            scope.launch {
-                                                isLoading = true
-                                                val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name).filter { it.id !in dislikedIds }
-                                                isLoading = false
-                                                if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                            }
-                                        },
-                                        onRadioClick = { album ->
-                                            scope.launch {
-                                                isLoading = true
-                                                val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name).filter { it.id !in dislikedIds }
-                                                if (songs.isNotEmpty()) {
-                                                    val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
-                                                    val fullQueue = (songs + radioQueue).distinctBy { it.id }
-                                                    playerController.playSong(fullQueue.first(), fullQueue)
-                                                }
-                                                isLoading = false
-                                            }
-                                        }
-                                    )
-                                    2 -> ArtistList(
-                                        artists = artistResults,
-                                        hasMore = hasMoreArtists,
-                                        isLoadingMore = isLoadingMore,
-                                        onLoadMore = { loadMoreArtists() },
-                                        modifier = Modifier.weight(1f),
-                                        onArtistClick = { artist ->
-                                            scope.launch {
-                                                isLoading = true
-                                                val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name).filter { it.id !in dislikedIds }
-                                                isLoading = false
-                                                if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                            }
-                                        },
-                                        onRadioClick = { artist ->
-                                            scope.launch {
-                                                isLoading = true
-                                                val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name).filter { it.id !in dislikedIds }
-                                                if (songs.isNotEmpty()) {
-                                                    val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
-                                                    val fullQueue = (songs + radioQueue).distinctBy { it.id }
-                                                    playerController.playSong(fullQueue.first(), fullQueue)
-                                                }
-                                                isLoading = false
-                                            }
-                                        }
-                                    )
-                                    3 -> PlaylistList(
-                                        playlists = playlistResults,
-                                        hasMore = hasMorePlaylists,
-                                        isLoadingMore = isLoadingMore,
-                                        onLoadMore = { loadMorePlaylists() },
-                                        modifier = Modifier.weight(1f),
-                                        onPlaylistClick = { playlist ->
-                                            scope.launch {
-                                                isLoading = true
-                                                val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name).filter { it.id !in dislikedIds }
-                                                isLoading = false
-                                                if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                            }
-                                        },
-                                        onRadioClick = { playlist ->
-                                            scope.launch {
-                                                isLoading = true
-                                                val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name).filter { it.id !in dislikedIds }
-                                                if (songs.isNotEmpty()) {
-                                                    val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
-                                                    val fullQueue = (songs + radioQueue).distinctBy { it.id }
-                                                    playerController.playSong(fullQueue.first(), fullQueue)
-                                                }
-                                                isLoading = false
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        } else {
-                            ExploreLanguageHub(
-                                homeFeed = homeFeed,
-                                trendingSongs = trendingSongs,
-                                currentSong = currentSong,
-                                isPlaying = isPlaying,
-                                likedSongs = likedSongs,
-                                dislikedIds = dislikedIds,
-                                firebaseSyncManager = firebaseSyncManager,
-                                playerController = playerController,
-                                isFeedLoading = isFeedLoading,
-                                hasMoreTrending = hasMoreTrending,
-                                isTrendingLoadingMore = isTrendingLoadingMore,
-                                onLoadMoreTrending = { loadMoreTrending() },
-                                onAlbumClick = { album ->
-                                    scope.launch {
-                                        isLoading = true
-                                        val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name).filter { it.id !in dislikedIds }
-                                        isLoading = false
-                                        if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                    }
-                                },
-                                onArtistClick = { artist ->
-                                    scope.launch {
-                                        isLoading = true
-                                        val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name).filter { it.id !in dislikedIds }
-                                        isLoading = false
-                                        if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                    }
-                                },
-                                onPlaylistClick = { playlist ->
-                                    scope.launch {
-                                        isLoading = true
-                                        val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name).filter { it.id !in dislikedIds }
-                                        isLoading = false
-                                        if (songs.isNotEmpty()) playerController.playSong(songs.first(), songs)
-                                    }
-                                },
-                                onRadioPlay = { song ->
-                                    scope.launch {
-                                        isLoading = true
-                                        val radioQueue = JioSaavnApiClient.getRadioSongs(song)
-                                        isLoading = false
-                                        val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
-                                        if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-
-                    MainNavSection.LIKED_MUSIC -> {
-                        val visibleLiked = likedSongs.filter { it.id !in dislikedIds }
-                        PlayAllHeaderRow(
-                            title = "Liked Music (${visibleLiked.size})",
-                            onPlayAll = { playerController.playAll(visibleLiked, shuffle = false) },
-                            onShuffleAll = { playerController.playAll(visibleLiked, shuffle = true) },
-                            isEnabled = visibleLiked.isNotEmpty()
-                        )
-                        SongList(
-                            songs = visibleLiked,
-                            currentSong = currentSong,
-                            isPlaying = isPlaying,
-                            likedSongs = likedSongs,
-                            dislikedIds = dislikedIds,
-                            firebaseSyncManager = firebaseSyncManager,
-                            playerController = playerController,
-                            emptyMessage = "No liked songs yet. Tap the heart on any song to add it here!",
-                            modifier = Modifier.weight(1f),
-                            onSongClick = { song -> playerController.playSong(song, visibleLiked) },
-                            onRadioPlay = { song ->
-                                scope.launch {
-                                    isLoading = true
-                                    val radioQueue = JioSaavnApiClient.getRadioSongs(song)
-                                    isLoading = false
-                                    val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
-                                    if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
-                                }
-                            }
-                        )
-                    }
-
-                    MainNavSection.RECENT -> {
-                        val visibleRecent = recentlyListened.filter { it.id !in dislikedIds }
-                        PlayAllHeaderRow(
-                            title = "Recently Listened (${visibleRecent.size})",
-                            onPlayAll = { playerController.playAll(visibleRecent, shuffle = false) },
-                            onShuffleAll = { playerController.playAll(visibleRecent, shuffle = true) },
-                            isEnabled = visibleRecent.isNotEmpty()
-                        )
-                        SongList(
-                            songs = visibleRecent,
-                            currentSong = currentSong,
-                            isPlaying = isPlaying,
-                            likedSongs = likedSongs,
-                            dislikedIds = dislikedIds,
-                            firebaseSyncManager = firebaseSyncManager,
-                            playerController = playerController,
-                            emptyMessage = "No songs listened in the last 7 days. Play music to track history!",
-                            modifier = Modifier.weight(1f),
-                            onSongClick = { song -> playerController.playSong(song, visibleRecent) },
-                            onRadioPlay = { song ->
-                                scope.launch {
-                                    isLoading = true
-                                    val radioQueue = JioSaavnApiClient.getRadioSongs(song)
-                                    isLoading = false
-                                    val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
-                                    if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
-                                }
-                            }
-                        )
                     }
                 }
             }
 
-            // â”€â”€ Persistent Mini-Player Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            if (currentSong != null) {
-                val isSongLiked = likedSongs.any { it.id == currentSong?.id }
-
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable { showNowPlaying = true },
-                    color = AmoledCard,
-                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
-                    tonalElevation = 8.dp
-                ) {
-                    Row(
+            // ── Section Content ──────────────────────────────────────────────
+            when (currentSection) {
+                MainNavSection.HOME -> {
+                    // Quick Search Pill (Spotify-style: tap to jump straight into Search + Keyboard)
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SpotifyCard,
+                        border = BorderStroke(1.dp, Color(0xFF1E293B)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                shouldAutoFocusSearch = true
+                                currentSection = MainNavSection.SEARCH
+                            }
                     ) {
-                        AsyncImage(
-                            model = currentSong?.highResArtworkUrl,
-                            contentDescription = currentSong?.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = currentSong?.title ?: "",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = currentSong?.artist ?: "",
-                                fontSize = 12.sp,
-                                color = TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        // Mini-Player Like Button
-                        IconButton(
-                            onClick = { currentSong?.let { firebaseSyncManager.toggleLike(it) } },
-                            modifier = Modifier.size(36.dp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (isSongLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = "Like Song",
-                                tint = if (isSongLiked) HeartRed else TextSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { playerController.togglePlay() },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Play/Pause",
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
                                 tint = SovereignBlue,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                        }
-
-                        IconButton(
-                            onClick = { playerController.skipNext() },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Next",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(22.dp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "What do you want to listen to?",
+                                color = TextSecondary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LanguageFilterChips(
+                        selectedLanguage = selectedLanguage,
+                        onLanguageSelected = { lang ->
+                            if (selectedLanguage != lang) {
+                                selectedLanguage = lang
+                                val instant = JioSaavnApiClient.getInstantInitialFeed(lang)
+                                homeFeed = instant
+                                trendingSongs = instant.trendingSongs.take(5)
+                                trendingPage = 1
+                                hasMoreTrending = true
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val visibleTrendingHeader = trendingSongs.filter { it.id !in dislikedIds }
+                    PlayAllHeaderRow(
+                        title = "Today's Top ${visibleTrendingHeader.size} · ${selectedLanguage.displayName}",
+                        onPlayAll = { playerController.playAll(visibleTrendingHeader, shuffle = false) },
+                        onShuffleAll = { playerController.playAll(visibleTrendingHeader, shuffle = true) },
+                        isEnabled = visibleTrendingHeader.isNotEmpty()
+                    )
+
+                    ExploreLanguageHub(
+                        homeFeed = homeFeed,
+                        trendingSongs = trendingSongs,
+                        recentlyListened = recentlyListened.filter { it.id !in dislikedIds },
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                        likedSongs = likedSongs,
+                        dislikedIds = dislikedIds,
+                        firebaseSyncManager = firebaseSyncManager,
+                        playerController = playerController,
+                        isFeedLoading = isFeedLoading,
+                        hasMoreTrending = hasMoreTrending,
+                        isTrendingLoadingMore = isTrendingLoadingMore,
+                        onLoadMoreTrending = { loadMoreTrending() },
+                        onAlbumClick = { album -> openAlbumDetail(album) },
+                        onArtistClick = { artist -> openArtistDetail(artist) },
+                        onPlaylistClick = { playlist -> openPlaylistDetail(playlist) },
+                        onRadioPlay = { song ->
+                            scope.launch {
+                                isLoading = true
+                                val radioQueue = JioSaavnApiClient.getRadioSongs(song)
+                                isLoading = false
+                                val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
+                                if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                MainNavSection.SEARCH -> {
+                    // Instant-Focus Spotify Search Bar
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { query ->
+                            searchQuery = query
+                            triggerSearch(query)
+                        },
+                        placeholder = {
+                            Text("What do you want to listen to?", color = TextSecondary, fontSize = 14.sp)
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search",
+                                tint = SovereignBlue
+                            )
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    searchQuery = ""
+                                    songResults = emptyList(); albumResults = emptyList()
+                                    artistResults = emptyList(); playlistResults = emptyList()
+                                    selectedTab = 0
+                                    searchFocusRequester.requestFocus()
+                                    keyboardController?.show()
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "Clear",
+                                        tint = TextSecondary
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        }),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor   = SpotifyElevated,
+                            unfocusedContainerColor = SpotifyCard,
+                            focusedBorderColor      = SovereignBlue,
+                            unfocusedBorderColor    = Color(0xFF1E293B),
+                            focusedTextColor        = TextPrimary,
+                            unfocusedTextColor      = TextPrimary,
+                            cursorColor             = SovereignBlue
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(searchFocusRequester)
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    keyboardController?.show()
+                                }
+                            }
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (searchQuery.length >= 2) {
+                        SearchTabBar(
+                            selectedTab = selectedTab,
+                            tabs = SEARCH_TABS,
+                            onTabSelected = { selectedTab = it }
+                        )
+                        if (isLoading) {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp, bottom = 4.dp)
+                                    .height(2.dp),
+                                color = SovereignBlue,
+                                trackColor = AmoledCard
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        val isInitialSearchEmpty = isLoading && songResults.isEmpty() && albumResults.isEmpty() && artistResults.isEmpty() && playlistResults.isEmpty()
+                        if (isInitialSearchEmpty) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    CircularProgressIndicator(color = SovereignBlue)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text("Searching JioSaavn...", color = TextSecondary, fontSize = 13.sp)
+                                }
+                            }
+                        } else {
+                            when (selectedTab) {
+                                0 -> SongList(
+                                    songs = songResults.filter { it.id !in dislikedIds },
+                                    currentSong = currentSong,
+                                    isPlaying = isPlaying,
+                                    likedSongs = likedSongs,
+                                    dislikedIds = dislikedIds,
+                                    firebaseSyncManager = firebaseSyncManager,
+                                    playerController = playerController,
+                                    hasMore = hasMoreSongs,
+                                    isLoadingMore = isLoadingMore,
+                                    onLoadMore = { loadMoreSongs() },
+                                    modifier = Modifier.weight(1f),
+                                    onSongClick = { song -> playerController.playSong(song, songResults.filter { it.id !in dislikedIds }) },
+                                    onRadioPlay = { song ->
+                                        scope.launch {
+                                            isLoading = true
+                                            val radioQueue = JioSaavnApiClient.getRadioSongs(song)
+                                            isLoading = false
+                                            val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
+                                            if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
+                                        }
+                                    }
+                                )
+                                1 -> AlbumList(
+                                    albums = albumResults,
+                                    hasMore = hasMoreAlbums,
+                                    isLoadingMore = isLoadingMore,
+                                    onLoadMore = { loadMoreAlbums() },
+                                    modifier = Modifier.weight(1f),
+                                    onAlbumClick = { album -> openAlbumDetail(album) },
+                                    onRadioClick = { album ->
+                                        scope.launch {
+                                            isLoading = true
+                                            val songs = JioSaavnApiClient.getAlbumSongs(album.id, album.name).filter { it.id !in dislikedIds }
+                                            if (songs.isNotEmpty()) {
+                                                val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
+                                                val fullQueue = (songs + radioQueue).distinctBy { it.id }
+                                                playerController.playSong(fullQueue.first(), fullQueue)
+                                            }
+                                            isLoading = false
+                                        }
+                                    }
+                                )
+                                2 -> ArtistList(
+                                    artists = artistResults,
+                                    hasMore = hasMoreArtists,
+                                    isLoadingMore = isLoadingMore,
+                                    onLoadMore = { loadMoreArtists() },
+                                    modifier = Modifier.weight(1f),
+                                    onArtistClick = { artist -> openArtistDetail(artist) },
+                                    onRadioClick = { artist ->
+                                        scope.launch {
+                                            isLoading = true
+                                            val songs = JioSaavnApiClient.getArtistSongs(artist.id, artist.name).filter { it.id !in dislikedIds }
+                                            if (songs.isNotEmpty()) {
+                                                val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
+                                                val fullQueue = (songs + radioQueue).distinctBy { it.id }
+                                                playerController.playSong(fullQueue.first(), fullQueue)
+                                            }
+                                            isLoading = false
+                                        }
+                                    }
+                                )
+                                3 -> PlaylistList(
+                                    playlists = playlistResults,
+                                    hasMore = hasMorePlaylists,
+                                    isLoadingMore = isLoadingMore,
+                                    onLoadMore = { loadMorePlaylists() },
+                                    modifier = Modifier.weight(1f),
+                                    onPlaylistClick = { playlist -> openPlaylistDetail(playlist) },
+                                    onRadioClick = { playlist ->
+                                        scope.launch {
+                                            isLoading = true
+                                            val songs = JioSaavnApiClient.getPlaylistSongs(playlist.id, playlist.name).filter { it.id !in dislikedIds }
+                                            if (songs.isNotEmpty()) {
+                                                val radioQueue = JioSaavnApiClient.getRadioSongs(songs.first()).filter { it.id !in dislikedIds }
+                                                val fullQueue = (songs + radioQueue).distinctBy { it.id }
+                                                playerController.playSong(fullQueue.first(), fullQueue)
+                                            }
+                                            isLoading = false
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        // Spotify-style Browse All Moods & Languages Grid
+                        Text(
+                            text = "Browse All",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            modifier = Modifier.padding(vertical = 6.dp)
+                        )
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 24.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            items(BROWSE_CATEGORIES) { cat ->
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = cat.color.copy(alpha = 0.22f),
+                                    border = BorderStroke(1.dp, cat.color.copy(alpha = 0.45f)),
+                                    modifier = Modifier
+                                        .height(78.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            searchQuery = cat.query
+                                            triggerSearch(cat.query)
+                                            focusManager.clearFocus()
+                                            keyboardController?.hide()
+                                        }
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(12.dp),
+                                        contentAlignment = Alignment.BottomStart
+                                    ) {
+                                        Text(
+                                            text = cat.title,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                MainNavSection.LIKED_MUSIC -> {
+                    val visibleLiked = likedSongs.filter { it.id !in dislikedIds }
+                    PlayAllHeaderRow(
+                        title = "Liked Songs (${visibleLiked.size})",
+                        onPlayAll = { playerController.playAll(visibleLiked, shuffle = false) },
+                        onShuffleAll = { playerController.playAll(visibleLiked, shuffle = true) },
+                        isEnabled = visibleLiked.isNotEmpty()
+                    )
+                    SongList(
+                        songs = visibleLiked,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                        likedSongs = likedSongs,
+                        dislikedIds = dislikedIds,
+                        firebaseSyncManager = firebaseSyncManager,
+                        playerController = playerController,
+                        emptyMessage = "No liked songs yet. Tap the heart on any song to add it here!",
+                        modifier = Modifier.weight(1f),
+                        onSongClick = { song -> playerController.playSong(song, visibleLiked) },
+                        onRadioPlay = { song ->
+                            scope.launch {
+                                isLoading = true
+                                val radioQueue = JioSaavnApiClient.getRadioSongs(song)
+                                isLoading = false
+                                val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
+                                if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
+                            }
+                        }
+                    )
+                }
+
+                MainNavSection.RECENT -> {
+                    val visibleRecent = recentlyListened.filter { it.id !in dislikedIds }
+                    PlayAllHeaderRow(
+                        title = "Recently Played (${visibleRecent.size})",
+                        onPlayAll = { playerController.playAll(visibleRecent, shuffle = false) },
+                        onShuffleAll = { playerController.playAll(visibleRecent, shuffle = true) },
+                        isEnabled = visibleRecent.isNotEmpty()
+                    )
+                    SongList(
+                        songs = visibleRecent,
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                        likedSongs = likedSongs,
+                        dislikedIds = dislikedIds,
+                        firebaseSyncManager = firebaseSyncManager,
+                        playerController = playerController,
+                        emptyMessage = "No songs listened in the last 7 days. Play music to track history!",
+                        modifier = Modifier.weight(1f),
+                        onSongClick = { song -> playerController.playSong(song, visibleRecent) },
+                        onRadioPlay = { song ->
+                            scope.launch {
+                                isLoading = true
+                                val radioQueue = JioSaavnApiClient.getRadioSongs(song)
+                                isLoading = false
+                                val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
+                                if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
+                            }
+                        }
+                    )
                 }
             }
         }
     }
 
-    // â”€â”€ Modal Sheets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Modal Sheets ─────────────────────────────────────────────────────────
+    collectionDetail?.let { detail ->
+        CollectionDetailSheet(
+            state = detail,
+            currentSong = currentSong,
+            isPlaying = isPlaying,
+            likedSongs = likedSongs,
+            dislikedIds = dislikedIds,
+            firebaseSyncManager = firebaseSyncManager,
+            playerController = playerController,
+            onPlayAll = { songs -> playerController.playAll(songs, shuffle = false) },
+            onShuffleAll = { songs -> playerController.playAll(songs, shuffle = true) },
+            onRadioPlay = { song ->
+                scope.launch {
+                    isLoading = true
+                    val radioQueue = JioSaavnApiClient.getRadioSongs(song)
+                    isLoading = false
+                    val filtered = (listOf(song) + radioQueue).filter { it.id !in dislikedIds }
+                    if (filtered.isNotEmpty()) playerController.playSong(filtered.first(), filtered)
+                }
+            },
+            onDismissRequest = { collectionDetail = null }
+        )
+    }
     if (showNowPlaying) {
         NowPlayingSheet(
             playerController = playerController,
@@ -2410,6 +2649,7 @@ private fun HorizontalPlaylistRow(
 private fun ExploreLanguageHub(
     homeFeed: LanguageHomeFeed?,
     trendingSongs: List<SongItem>,
+    recentlyListened: List<SongItem> = emptyList(),
     currentSong: SongItem?,
     isPlaying: Boolean,
     likedSongs: List<SongItem>,
@@ -2445,6 +2685,55 @@ private fun ExploreLanguageHub(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Spotify-style 2-column "Jump back in" Quick Picks Grid
+        val quickPicks = recentlyListened.take(4)
+        if (quickPicks.size >= 2) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    quickPicks.chunked(2).forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowItems.forEach { song ->
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = SpotifyCard,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(52.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { playerController.playSong(song, recentlyListened) }
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        AsyncImage(
+                                            model = song.highResArtworkUrl,
+                                            contentDescription = song.title,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(52.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = song.title,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (currentSong?.id == song.id) SovereignBlue else TextPrimary,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            if (rowItems.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+        }
         // Trending songs (starts with Top 5, grows with on-demand pagination)
         items(visibleTrending, key = { it.id }) { song ->
             SongRowItem(

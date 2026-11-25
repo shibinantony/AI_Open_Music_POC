@@ -6,6 +6,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [4.1.0] — 2026-11-25
+
+### Fixed
+- **Live Daily Trends & Chart Refresh:**
+  - Replaced static keyword-search home feeds with JioSaavn's live `webapi.getLaunchData` and `playlist.getDetails` chart endpoints (`India Superhits Top 50` per language).
+  - Added 4-hour cache TTL + `onResume()` automatic stale-cache eviction and a manual Refresh Trends button.
+  - Stopped caching static fallback feeds on cold-start timeouts so network recovery always pulls live data.
+- **Instant First-Tap Search Keyboard:**
+  - Switched `android:windowSoftInputMode` to `adjustNothing` to eliminate edge-to-edge full-screen relayout stalls on Samsung One UI 8.5.
+  - Isolated Search into a dedicated tab with `FocusRequester` + `SoftwareKeyboardController.show()` so the keyboard opens immediately on the first tap.
+
+### Enhanced
+- **Spotify-Grade Mobile UX & Navigation:**
+  - Added a Spotify-style Bottom Navigation Bar (`Home`, `Search`, `Liked`, `Recent`) and floating Mini-Player with a 2dp live playback progress bar.
+  - Added `CollectionDetailSheet` so tapping any Album, Artist, or Playlist opens an interactive Spotify-style tracklist sheet with Play All, Shuffle, Radio, and per-track playback.
+  - Added a 2-column "Jump back in" quick-picks grid on Home and a "Browse All" mood/language grid on Search.
+
+---
+
 ## [4.0.0] — 2026-11-16
 
 ### Added

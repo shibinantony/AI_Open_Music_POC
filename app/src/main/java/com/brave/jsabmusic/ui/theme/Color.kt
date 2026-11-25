@@ -8,6 +8,12 @@ val AmoledSurface = Color(0xFF080E1A)
 val AmoledCard = Color(0xFF0F172A)
 val PeacefulNightSurface = Color(0xFF1E293B)
 
+// Spotify-Grade Elevated Dark Surfaces
+val SpotifyBase = Color(0xFF121212)
+val SpotifyCard = Color(0xFF181818)
+val SpotifyElevated = Color(0xFF242424)
+val SpotifyNavBar = Color(0xFF0A0F1A)
+
 // Serene Sovereign Blue Accent Palette
 val SovereignBlue = Color(0xFF38BDF8)           // Sky / Peaceful cyan-blue
 val SovereignBlueAccent = Color(0xFF60A5FA)     // Celestial Blue
